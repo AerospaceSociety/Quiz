@@ -1,0 +1,154 @@
+{
+  "meta": {
+    "portal": "QUIZZITCH",
+    "event": "CelesteCon 2026",
+    "round": "Round 1 — Online Qualifier",
+    "organiser": "AEROSS — The Aerospace Society, Delhi Public School R.K. Puram",
+    "build": "2026.08.31",
+    "contact": "aeross@dpsrkp.net"
+  },
+
+  "exam": {
+    "durationSeconds": 2700,
+    "warnAtSeconds": 600,
+    "criticalAtSeconds": 300,
+    "clockTickMs": 250,
+    "autoSubmitOnExpiry": true,
+    "allowFreeNavigation": true,
+    "shuffleQuestions": false,
+    "shuffleOptions": false
+  },
+
+  "security": {
+    "maxStrikes": 3,
+    "redockSeconds": 10,
+    "focusAckSeconds": 15,
+    "focusDedupeMs": 1500,
+    "requireFullscreen": true,
+    "blockContextMenu": true,
+    "blockClipboard": true,
+    "blockSelection": true,
+    "blockDrag": true,
+    "blockDevtoolsKeys": true,
+    "blockReloadKeys": true,
+    "blockPrintKeys": true,
+    "warnOnUnload": true,
+    "logDomCap": 260
+  },
+
+  "proctoring": {
+    "enabled": true,
+    "allowDegradedMode": true,
+    "requireBaselineSnapshot": true,
+    "sampleIntervalMs": 250,
+    "sampleWidth": 128,
+    "sampleHeight": 96,
+    "absenceFrames": 16,
+    "multiFaceFrames": 14,
+    "gadgetFrames": 8,
+    "flagCooldownMs": 20000,
+    "flagsPerStrike": 3,
+    "heartbeatEveryFrames": 240,
+    "video": { "idealWidth": 640, "idealHeight": 480, "facingMode": "user" }
+  },
+
+  "schemes": {
+    "standard": {
+      "label": "STANDARD SINGLE",
+      "marks": "+2 / 0",
+      "correct": 2,
+      "incorrect": 0,
+      "unattempted": 0,
+      "multi": false,
+      "note": ""
+    },
+    "highstakes": {
+      "label": "HIGH-STAKES SINGLE",
+      "marks": "+2 / −1",
+      "correct": 2,
+      "incorrect": -1,
+      "unattempted": 0,
+      "multi": false,
+      "note": "NEGATIVE MARKING ACTIVE · an incorrect response deducts 1 mark. An unattempted item scores 0."
+    },
+    "multi": {
+      "label": "MULTIPLE CORRECT",
+      "marks": "+4 / −2",
+      "correct": 4,
+      "incorrect": -2,
+      "unattempted": 0,
+      "multi": true,
+      "note": "MULTI-SELECT ITEM · select every option that applies. A partial or excess selection is scored as incorrect (−2). An unattempted item scores 0."
+    }
+  },
+
+  "modules": [
+    {
+      "id": 0,
+      "code": "M-01",
+      "short": "ORBITAL",
+      "name": "Orbital Mechanics & Astrodynamics",
+      "blurb": "Two-body dynamics, transfer geometry, perturbations and manoeuvre budgeting."
+    },
+    {
+      "id": 1,
+      "code": "M-02",
+      "short": "HABITAT",
+      "name": "Space Settlement & Habitat Engineering",
+      "blurb": "Artificial gravity, radiation shielding, closed-loop life support and structures."
+    },
+    {
+      "id": 2,
+      "code": "M-03",
+      "short": "PROPULSION",
+      "name": "UAV, CFD & Supersonic Propulsion",
+      "blurb": "Compressible flow, nozzle and inlet design, boundary layers and airframe drag."
+    },
+    {
+      "id": 3,
+      "code": "M-04",
+      "short": "DEEP SPACE",
+      "name": "Deep Space Exploration & Astrophysics",
+      "blurb": "Mission history, planetary protection, stellar end-states and cosmological evidence."
+    }
+  ],
+
+  "registry": {
+    "idPrefix": "CC26-QZ-",
+    "idPattern": "^CC26-QZ-[0-9]{4}$",
+    "idPlaceholder": "CC26-QZ-0000",
+    "minNameLength": 3,
+    "defaultSchool": "Delhi Public School, R.K. Puram",
+    "grades": ["VI", "VII", "VIII", "IX", "X", "XI", "XII"]
+  },
+
+  "briefing": [
+    "<b>Duration.</b> 45 minutes on a synchronised countdown. The paper auto-submits at T‑00:00.",
+    "<b>Display lock.</b> The terminal must remain in fullscreen. Exiting opens a 10-second re-dock window.",
+    "<b>Focus discipline.</b> Switching tabs, windows or applications is logged instantly and costs one strike.",
+    "<b>Strike ledger.</b> Three strikes trigger automatic lockout and forced submission of the paper.",
+    "<b>Optical presence.</b> Your face must remain in frame. Absence, second profiles and device glare are flagged.",
+    "<b>Input sandbox.</b> Right-click, copy, cut, paste, selection, print and developer shortcuts are disabled.",
+    "<b>Marking.</b> Three schemes run in the same paper: +2/0 standard, +2/−1 high-stakes, +4/−2 multiple-correct.",
+    "<b>Navigation.</b> Free movement across all four modules; responses may be cleared or flagged for review.",
+    "<b>Audit.</b> Every anomaly is timestamped and printed into your post-test dossier for the invigilation panel.",
+    "<b>Integrity.</b> No external material, second screen, headset or assistance of any kind is permitted."
+  ],
+
+  "jotform": {
+    "formId": "261896133006456",
+    "proxyUrl": "/api/submit",
+    "fallbackDirectSubmit": true,
+    "fieldMap": {
+      "school_name": "2",
+      "contact_name": "3",
+      "contact_email": "4",
+      "contact_phone": "5",
+      "events_selected": "6",
+      "registration_summary": "7",
+      "registration_json": "8",
+      "total_teams": "9",
+      "total_participants": "10"
+    }
+  }
+}

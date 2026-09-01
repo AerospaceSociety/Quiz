@@ -1,0 +1,270 @@
+/* ==========================================================================
+   QUIZZITCH — proctor.css
+   Webcam verification viewport, clean telemetry meters and audit log.
+   Matching CelesteCon #26 official design architecture (celestecon.aeross.org).
+   ========================================================================== */
+
+/* --- 01 · WEBCAM PROCTOR VIEWPORT ----------------------------------------- */
+.optic {
+  position: relative;
+  aspect-ratio: 4 / 3;
+  display: grid;
+  place-items: center;
+  background: var(--surface-input);
+  border: 1px solid var(--border-sub);
+  border-radius: var(--radius-xs);
+  overflow: hidden;
+}
+.optic--live {
+  border-radius: 0;
+  border-left: 0;
+  border-right: 0;
+  border-top: 0;
+}
+
+.optic video,
+.optic img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.optic__placeholder {
+  padding: 16px;
+  text-align: center;
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  font-weight: 500;
+  color: var(--ink-3);
+  line-height: 1.6;
+}
+.optic__placeholder span {
+  display: block;
+  font-size: 10.5px;
+  color: var(--ink-4);
+  margin-top: 4px;
+}
+.optic--offline .optic__placeholder {
+  color: var(--danger);
+}
+
+/* Subtle Corner Guide Marks */
+.optic__brackets {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+.optic__brackets i {
+  position: absolute;
+  width: 12px;
+  height: 12px;
+  border: 1.5px solid var(--ink);
+  opacity: .4;
+}
+.optic__brackets i:nth-child(1) { top: 8px;    left: 8px;  border-right: 0; border-bottom: 0; }
+.optic__brackets i:nth-child(2) { top: 8px;    right: 8px; border-left: 0;  border-bottom: 0; }
+.optic__brackets i:nth-child(3) { bottom: 8px; left: 8px;  border-right: 0; border-top: 0; }
+.optic__brackets i:nth-child(4) { bottom: 8px; right: 8px; border-left: 0;  border-top: 0; }
+
+.optic__reticle {
+  display: none;
+}
+
+/* Live Subject Bounding Box */
+.optic__box {
+  position: absolute;
+  border: 1px solid var(--crimson);
+  background: rgba(194, 58, 30, .05);
+  pointer-events: none;
+  transition: left var(--t-base), top var(--t-base), width var(--t-base), height var(--t-base);
+}
+.optic__box i { display: none; }
+.optic__box b {
+  position: absolute;
+  left: 0;
+  bottom: -18px;
+  padding: 1px 5px;
+  background: var(--ink);
+  font-family: var(--font-mono);
+  font-size: 8.5px;
+  font-weight: 600;
+  letter-spacing: .04em;
+  white-space: nowrap;
+  color: #fff;
+  border-radius: 2px;
+}
+
+/* Recording Pill */
+.optic__rec {
+  position: absolute;
+  top: 8px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 2px 8px;
+  border-radius: var(--radius-pill);
+  background: rgba(22, 19, 16, .85);
+  border: 1px solid var(--border);
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  font-weight: 600;
+  text-transform: uppercase;
+  color: #fff;
+  pointer-events: none;
+}
+
+/* --- 02 · BASELINE SNAPSHOT ---------------------------------------------- */
+.snapshot {
+  position: relative;
+  aspect-ratio: 4 / 3;
+  display: grid;
+  place-items: center;
+  background: var(--surface-input);
+  border: 1px solid var(--border-sub);
+  border-radius: var(--radius-xs);
+  overflow: hidden;
+}
+.snapshot img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.snapshot__empty {
+  padding: 16px;
+  text-align: center;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--ink-4);
+}
+
+/* --- 03 · STATUS STRIP ---------------------------------------------------- */
+.statusstrip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 10px 14px;
+  background: var(--surface-3);
+  border-top: 1px solid var(--border-sub);
+}
+
+/* --- 04 · TELEMETRY METERS ------------------------------------------------ */
+.meters {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1px;
+  background: var(--border-sub);
+}
+.meters--compact {
+  border: 1px solid var(--border-sub);
+  border-radius: var(--radius-xs);
+  overflow: hidden;
+  margin-top: 12px;
+}
+
+.meter-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 10px 12px;
+  background: var(--surface-input);
+}
+.meter-cell__k {
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  font-weight: 600;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+.meter-cell__v {
+  font-family: var(--font-mono);
+  font-size: 15px;
+  font-weight: 700;
+  line-height: 1.1;
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+  word-break: break-word;
+}
+.meter-cell__v--sm {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--ink-3);
+}
+.meter-cell__v.is-ok   { color: var(--success); }
+.meter-cell__v.is-warn { color: var(--warning); }
+.meter-cell__v.is-bad  { color: var(--danger); }
+
+.meter {
+  display: block;
+  height: 4px;
+  margin-top: 3px;
+  background: var(--surface-3);
+  border-radius: 2px;
+  overflow: hidden;
+}
+.meter i {
+  display: block;
+  height: 100%;
+  width: 0;
+  background: var(--crimson);
+  border-radius: 2px;
+  transition: width var(--t-base);
+}
+.meter i.is-ok   { background: var(--success); }
+.meter i.is-warn { background: var(--warning); }
+.meter i.is-bad  { background: var(--danger); }
+
+/* --- 05 · SECURITY EVENT LOG --------------------------------------------- */
+.logbox {
+  height: 170px;
+  min-height: 120px;
+  overflow-y: auto;
+  padding: 8px 12px;
+  background: var(--surface-input);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  line-height: 1.6;
+  scroll-behavior: smooth;
+}
+
+.logline {
+  display: grid;
+  grid-template-columns: 55px minmax(0, 1fr);
+  gap: 8px;
+  padding: 3px 0;
+  border-bottom: 1px solid rgba(22, 19, 16, .06);
+  color: var(--ink-2);
+  word-break: break-word;
+}
+.logline:last-child {
+  border-bottom: 0;
+}
+.logline .ts {
+  color: var(--ink-4);
+}
+
+.logline.sev-ok   .msg { color: var(--success); }
+.logline.sev-info .msg { color: var(--ink-2); }
+.logline.sev-scan .msg { color: var(--ink-3); }
+.logline.sev-warn .msg { color: var(--warning); }
+.logline.sev-crit .msg { color: var(--danger); font-weight: 600; }
+
+/* --- 06 · DEGRADED / OFFLINE STATES -------------------------------------- */
+.optic--idle .optic__brackets i {
+  border-color: var(--border-sub);
+  opacity: .3;
+}
+
+.optic.is-degraded {
+  border-color: var(--warning);
+}
+.optic.is-degraded .optic__rec {
+  border-color: var(--warning);
+  color: var(--warning);
+}

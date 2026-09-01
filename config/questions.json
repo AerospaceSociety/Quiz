@@ -1,0 +1,341 @@
+[
+  {
+    "id": 1,
+    "catId": 0,
+    "scheme": "standard",
+    "question": "Placeholder Question 01 — Orbital Mechanics & Astrodynamics. Replace with the actual technical prompt.",
+    "supplement": "",
+    "options": [
+      "Placeholder Option A",
+      "Placeholder Option B",
+      "Placeholder Option C",
+      "Placeholder Option D"
+    ],
+    "correct": [0]
+  },
+  {
+    "id": 2,
+    "catId": 0,
+    "scheme": "highstakes",
+    "question": "Placeholder Question 02 — Orbital Mechanics & Astrodynamics. Replace with the actual technical prompt.",
+    "supplement": "",
+    "options": [
+      "Placeholder Option A",
+      "Placeholder Option B",
+      "Placeholder Option C",
+      "Placeholder Option D"
+    ],
+    "correct": [3]
+  },
+  {
+    "id": 3,
+    "catId": 0,
+    "scheme": "standard",
+    "question": "Placeholder Question 03 — Orbital Mechanics & Astrodynamics. Replace with the actual technical prompt.",
+    "supplement": "Optional supplementary formula, note, or diagram reference.",
+    "options": [
+      "Placeholder Option A",
+      "Placeholder Option B",
+      "Placeholder Option C",
+      "Placeholder Option D"
+    ],
+    "correct": [2]
+  },
+  {
+    "id": 4,
+    "catId": 0,
+    "scheme": "multi",
+    "question": "Placeholder Question 04 — Orbital Mechanics & Astrodynamics. Multi-select item: replace with the actual technical prompt.",
+    "supplement": "",
+    "options": [
+      "Placeholder Option A",
+      "Placeholder Option B",
+      "Placeholder Option C",
+      "Placeholder Option D"
+    ],
+    "correct": [0, 1]
+  },
+  {
+    "id": 5,
+    "catId": 0,
+    "scheme": "highstakes",
+    "question": "Placeholder Question 05 — Orbital Mechanics & Astrodynamics. Replace with the actual technical prompt.",
+    "supplement": "",
+    "options": [
+      "Placeholder Option A",
+      "Placeholder Option B",
+      "Placeholder Option C",
+      "Placeholder Option D"
+    ],
+    "correct": [1]
+  },
+  {
+    "id": 6,
+    "catId": 0,
+    "scheme": "standard",
+    "question": "Placeholder Question 06 — Orbital Mechanics & Astrodynamics. Replace with the actual technical prompt.",
+    "supplement": "Optional supplementary formula, note, or diagram reference.",
+    "options": [
+      "Placeholder Option A",
+      "Placeholder Option B",
+      "Placeholder Option C",
+      "Placeholder Option D"
+    ],
+    "correct": [2]
+  },
+
+  {
+    "id": 7,
+    "catId": 1,
+    "scheme": "standard",
+    "question": "Placeholder Question 07 — Space Settlement & Habitat Engineering. Replace with the actual technical prompt.",
+    "supplement": "Optional supplementary formula, note, or diagram reference.",
+    "options": [
+      "Placeholder Option A",
+      "Placeholder Option B",
+      "Placeholder Option C",
+      "Placeholder Option D"
+    ],
+    "correct": [1]
+  },
+  {
+    "id": 8,
+    "catId": 1,
+    "scheme": "highstakes",
+    "question": "Placeholder Question 08 — Space Settlement & Habitat Engineering. Replace with the actual technical prompt.",
+    "supplement": "",
+    "options": [
+      "Placeholder Option A",
+      "Placeholder Option B",
+      "Placeholder Option C",
+      "Placeholder Option D"
+    ],
+    "correct": [0]
+  },
+  {
+    "id": 9,
+    "catId": 1,
+    "scheme": "standard",
+    "question": "Placeholder Question 09 — Space Settlement & Habitat Engineering. Replace with the actual technical prompt.",
+    "supplement": "",
+    "options": [
+      "Placeholder Option A",
+      "Placeholder Option B",
+      "Placeholder Option C",
+      "Placeholder Option D"
+    ],
+    "correct": [0]
+  },
+  {
+    "id": 10,
+    "catId": 1,
+    "scheme": "multi",
+    "question": "Placeholder Question 10 — Space Settlement & Habitat Engineering. Multi-select item: replace with the actual technical prompt.",
+    "supplement": "",
+    "options": [
+      "Placeholder Option A",
+      "Placeholder Option B",
+      "Placeholder Option C",
+      "Placeholder Option D"
+    ],
+    "correct": [1, 2, 3]
+  },
+  {
+    "id": 11,
+    "catId": 1,
+    "scheme": "highstakes",
+    "question": "Placeholder Question 11 — Space Settlement & Habitat Engineering. Replace with the actual technical prompt.",
+    "supplement": "",
+    "options": [
+      "Placeholder Option A",
+      "Placeholder Option B",
+      "Placeholder Option C",
+      "Placeholder Option D"
+    ],
+    "correct": [3]
+  },
+  {
+    "id": 12,
+    "catId": 1,
+    "scheme": "standard",
+    "question": "Placeholder Question 12 — Space Settlement & Habitat Engineering. Replace with the actual technical prompt.",
+    "supplement": "",
+    "options": [
+      "Placeholder Option A",
+      "Placeholder Option B",
+      "Placeholder Option C",
+      "Placeholder Option D"
+    ],
+    "correct": [2]
+  },
+
+  {
+    "id": 13,
+    "catId": 2,
+    "scheme": "standard",
+    "question": "Placeholder Question 13 — UAV, CFD & Supersonic Propulsion. Replace with the actual technical prompt.",
+    "supplement": "",
+    "options": [
+      "Placeholder Option A",
+      "Placeholder Option B",
+      "Placeholder Option C",
+      "Placeholder Option D"
+    ],
+    "correct": [1]
+  },
+  {
+    "id": 14,
+    "catId": 2,
+    "scheme": "highstakes",
+    "question": "Placeholder Question 14 — UAV, CFD & Supersonic Propulsion. Replace with the actual technical prompt.",
+    "supplement": "",
+    "options": [
+      "Placeholder Option A",
+      "Placeholder Option B",
+      "Placeholder Option C",
+      "Placeholder Option D"
+    ],
+    "correct": [2]
+  },
+  {
+    "id": 15,
+    "catId": 2,
+    "scheme": "standard",
+    "question": "Placeholder Question 15 — UAV, CFD & Supersonic Propulsion. Replace with the actual technical prompt.",
+    "supplement": "Optional supplementary formula, note, or diagram reference.",
+    "options": [
+      "Placeholder Option A",
+      "Placeholder Option B",
+      "Placeholder Option C",
+      "Placeholder Option D"
+    ],
+    "correct": [1]
+  },
+  {
+    "id": 16,
+    "catId": 2,
+    "scheme": "multi",
+    "question": "Placeholder Question 16 — UAV, CFD & Supersonic Propulsion. Multi-select item: replace with the actual technical prompt.",
+    "supplement": "",
+    "options": [
+      "Placeholder Option A",
+      "Placeholder Option B",
+      "Placeholder Option C",
+      "Placeholder Option D"
+    ],
+    "correct": [0, 1, 2]
+  },
+  {
+    "id": 17,
+    "catId": 2,
+    "scheme": "highstakes",
+    "question": "Placeholder Question 17 — UAV, CFD & Supersonic Propulsion. Replace with the actual technical prompt.",
+    "supplement": "",
+    "options": [
+      "Placeholder Option A",
+      "Placeholder Option B",
+      "Placeholder Option C",
+      "Placeholder Option D"
+    ],
+    "correct": [0]
+  },
+  {
+    "id": 18,
+    "catId": 2,
+    "scheme": "standard",
+    "question": "Placeholder Question 18 — UAV, CFD & Supersonic Propulsion. Replace with the actual technical prompt.",
+    "supplement": "",
+    "options": [
+      "Placeholder Option A",
+      "Placeholder Option B",
+      "Placeholder Option C",
+      "Placeholder Option D"
+    ],
+    "correct": [3]
+  },
+
+  {
+    "id": 19,
+    "catId": 3,
+    "scheme": "standard",
+    "question": "Placeholder Question 19 — Deep Space Exploration & Astrophysics. Replace with the actual technical prompt.",
+    "supplement": "",
+    "options": [
+      "Placeholder Option A",
+      "Placeholder Option B",
+      "Placeholder Option C",
+      "Placeholder Option D"
+    ],
+    "correct": [1]
+  },
+  {
+    "id": 20,
+    "catId": 3,
+    "scheme": "highstakes",
+    "question": "Placeholder Question 20 — Deep Space Exploration & Astrophysics. Replace with the actual technical prompt.",
+    "supplement": "",
+    "options": [
+      "Placeholder Option A",
+      "Placeholder Option B",
+      "Placeholder Option C",
+      "Placeholder Option D"
+    ],
+    "correct": [2]
+  },
+  {
+    "id": 21,
+    "catId": 3,
+    "scheme": "standard",
+    "question": "Placeholder Question 21 — Deep Space Exploration & Astrophysics. Replace with the actual technical prompt.",
+    "supplement": "",
+    "options": [
+      "Placeholder Option A",
+      "Placeholder Option B",
+      "Placeholder Option C",
+      "Placeholder Option D"
+    ],
+    "correct": [1]
+  },
+  {
+    "id": 22,
+    "catId": 3,
+    "scheme": "multi",
+    "question": "Placeholder Question 22 — Deep Space Exploration & Astrophysics. Multi-select item: replace with the actual technical prompt.",
+    "supplement": "",
+    "options": [
+      "Placeholder Option A",
+      "Placeholder Option B",
+      "Placeholder Option C",
+      "Placeholder Option D"
+    ],
+    "correct": [0, 2, 3]
+  },
+  {
+    "id": 23,
+    "catId": 3,
+    "scheme": "highstakes",
+    "question": "Placeholder Question 23 — Deep Space Exploration & Astrophysics. Replace with the actual technical prompt.",
+    "supplement": "",
+    "options": [
+      "Placeholder Option A",
+      "Placeholder Option B",
+      "Placeholder Option C",
+      "Placeholder Option D"
+    ],
+    "correct": [3]
+  },
+  {
+    "id": 24,
+    "catId": 3,
+    "scheme": "standard",
+    "question": "Placeholder Question 24 — Deep Space Exploration & Astrophysics. Replace with the actual technical prompt.",
+    "supplement": "Optional supplementary formula, note, or diagram reference.",
+    "options": [
+      "Placeholder Option A",
+      "Placeholder Option B",
+      "Placeholder Option C",
+      "Placeholder Option D"
+    ],
+    "correct": [0]
+  }
+]
