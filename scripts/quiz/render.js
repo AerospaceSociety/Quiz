@@ -223,9 +223,16 @@ export function renderQuestion() {
 
   const nextBtn = el('btn-next');
   if (nextBtn) {
-    nextBtn.textContent = S.idx === CFG.questions.length - 1
-      ? 'Review First Question ▶'
-      : 'Save & Proceed ▶';
+    const isLast = S.idx === CFG.questions.length - 1;
+    if (isLast) {
+      nextBtn.innerHTML = 'Submit Assessment ▶';
+      nextBtn.classList.add('btn--accent');
+      nextBtn.classList.remove('btn--primary');
+    } else {
+      nextBtn.innerHTML = 'Save &amp; Proceed ▶ <span class="btn__key">N</span>';
+      nextBtn.classList.remove('btn--accent');
+      nextBtn.classList.add('btn--primary');
+    }
   }
 
   renderOptions(q, r, sc);
@@ -485,14 +492,15 @@ export function renderDossier(d) {
   const itemBody = el('dos-items');
   if (itemBody) {
     itemBody.innerHTML = d.items.map((it) => {
-      const choice = it.selectedText && it.selectedText.length
-        ? it.selectedText.join(', ')
+      const hasChoice = it.selectedText && it.selectedText.length;
+      const choiceHtml = hasChoice
+        ? esc(it.selectedText.join(', '))
         : '<span style="color:var(--ink-4)">Unattempted</span>';
       return '<tr>'
         + `<td class="num"><b>${pad(it.n)}</b></td>`
         + `<td>${esc(it.moduleShort)}</td>`
         + `<td><code>${esc(it.questionId)}</code></td>`
-        + `<td>${esc(choice)}</td>`
+        + `<td>${choiceHtml}</td>`
         + `<td class="num">${mmss(it.seconds)}</td>`
         + `<td class="num">${it.visits}</td>`
         + '</tr>';

@@ -56,7 +56,7 @@
     "redockSeconds": 10,
     "focusAckSeconds": 15,
     "focusDedupeMs": 1500,
-    "requireFullscreen": true,
+    "requireFullscreen": false,
     "blockContextMenu": true,
     "blockClipboard": true,
     "blockSelection": true,

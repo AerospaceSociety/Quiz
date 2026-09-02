@@ -4,12 +4,15 @@
   "description": "Secure Assessment Portal - CelesteCon 2026",
   "scripts": {
     "dev": "serve . -l 8000",
-    "start": "serve . -l 8000"
+    "start": "serve . -l 8000",
+    "deploy": "wrangler pages deploy .",
+    "preview": "wrangler pages dev ."
   },
   "keywords": [],
   "author": "AEROSS",
   "license": "ISC",
   "devDependencies": {
-    "serve": "^14.2.6"
+    "serve": "^14.2.6",
+    "wrangler": "^4.128.0"
   }
 }

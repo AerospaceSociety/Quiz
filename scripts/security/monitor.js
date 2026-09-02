@@ -67,79 +67,39 @@ function onFocusLost(kind) {
 }
 
 function openFocusAlarm(kind) {
-  const seconds = CFG.settings.security.focusAckSeconds;
-  const max = CFG.settings.security.maxStrikes;
-
-  view.overlay.focusAlarm(kind, `${clockStamp()} · ${wallTime()}`, `${S.strikes} / ${max}`, seconds);
-
-  if (focusTicker) focusTicker.cancel();
-  focusTicker = createTicker(
-    seconds,
-    (left) => view.overlay.focusCount(left),
-    () => {
-      focusTicker = null;
-      view.overlay.close('ov-focus');
-      registerStrike('FOCUS', `Focus-breach alarm not acknowledged within ${seconds}s`);
-    }
-  );
+  toast('Focus Warning', `Portal focus lost (${kind}). Focus changes are recorded.`, 'warn', 5000);
 }
 
 export function acknowledgeFocusAlarm() {
-  if (focusTicker) { focusTicker.cancel(); focusTicker = null; }
-  view.overlay.close('ov-focus');
   logEvent('ok', 'FOCUS', 'Focus-breach alarm acknowledged by candidate');
-
-  if (S.stage === 'live' && !S.locked
-      && CFG.settings.security.requireFullscreen && !fullscreenElement()) {
-    beginRedock();
-  }
 }
 
-/* --- 03 · FULLSCREEN CONTAINMENT ----------------------------------------- */
+/* --- 03 · FULLSCREEN TRACKING -------------------------------------------- */
 function onFullscreenChange() {
   if (S.stage !== 'live' || S.locked) return;
 
   if (fullscreenElement()) {
-    if (redockTicker) { redockTicker.cancel(); redockTicker = null; }
-    view.overlay.close('ov-fs');
-    logEvent('ok', 'DISPLAY', 'Fullscreen containment re-established');
+    logEvent('ok', 'DISPLAY', 'Fullscreen containment active');
     return;
   }
 
   S.fsBreaches += 1;
-  const seconds = CFG.settings.security.redockSeconds;
-  logEvent('warn', 'DISPLAY', `Fullscreen containment released — ${seconds}s re-dock window opened`);
-  beginRedock();
+  logEvent('warn', 'DISPLAY', 'Fullscreen mode exited by candidate');
+  toast('Fullscreen Exited', 'Warning: You have exited fullscreen mode. You can continue your assessment, but display state changes are logged.', 'warn', 7000);
 }
 
 export function beginRedock() {
-  const seconds = CFG.settings.security.redockSeconds;
-
-  if (redockTicker) redockTicker.cancel();
-  view.overlay.redockCount(seconds);
-  view.overlay.open('ov-fs');
-
-  redockTicker = createTicker(
-    seconds,
-    (left) => view.overlay.redockCount(left),
-    () => {
-      redockTicker = null;
-      registerStrike('DISPLAY', `Failed to re-dock fullscreen within ${seconds}s`);
-      if (S.locked) return;
-      if (!fullscreenElement()) beginRedock();
-      else view.overlay.close('ov-fs');
-    }
-  );
+  // Graceful notification without forced screen capture
+  toast('Fullscreen Advisory', 'Fullscreen mode was exited. Press F11 or click to re-enter if required.', 'warn', 6000);
 }
 
 export function redock() {
   return requestFullscreen()
     .then(() => {
-      if (redockTicker) { redockTicker.cancel(); redockTicker = null; }
-      view.overlay.close('ov-fs');
+      logEvent('ok', 'DISPLAY', 'Fullscreen re-entered');
     })
     .catch(() => {
-      toast('Re-dock failed', 'The browser refused fullscreen. Press the button again.', 'danger');
+      toast('Fullscreen Notice', 'Could not switch to fullscreen. You may continue in windowed mode.', 'info');
     });
 }
 

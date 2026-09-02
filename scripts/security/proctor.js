@@ -118,8 +118,47 @@ export async function engageCamera() {
   if (hooks.onCalibrationChange) hooks.onCalibrationChange();
 }
 
-/* --- 03 · BASELINE SNAPSHOT ----------------------------------------------- */
-export function captureBaseline() {
+/* --- 03 · BASELINE SNAPSHOT & QUALITY VERIFICATION ----------------------- */
+function inspectFrameQuality(ctx, w, h) {
+  try {
+    const imgData = ctx.getImageData(0, 0, w, h);
+    const data = imgData.data;
+    const step = 8;
+    let sumLuma = 0;
+    let count = 0;
+    const samples = [];
+
+    // Sample active frame excluding bottom watermark strip
+    const sampleH = Math.max(10, h - 35);
+    for (let y = 10; y < sampleH; y += step) {
+      for (let x = 10; x < w - 10; x += step) {
+        const idx = (y * w + x) * 4;
+        const r = data[idx];
+        const g = data[idx + 1];
+        const b = data[idx + 2];
+        const luma = 0.299 * r + 0.587 * g + 0.114 * b;
+        sumLuma += luma;
+        samples.push(luma);
+        count++;
+      }
+    }
+
+    if (count === 0) return { meanLuma: 0, stdDev: 0 };
+
+    const meanLuma = sumLuma / count;
+    let sumSqDiff = 0;
+    for (let i = 0; i < samples.length; i++) {
+      const diff = samples[i] - meanLuma;
+      sumSqDiff += diff * diff;
+    }
+    const stdDev = Math.sqrt(sumSqDiff / count);
+    return { meanLuma, stdDev };
+  } catch (_) {
+    return { meanLuma: 50, stdDev: 20 };
+  }
+}
+
+export async function captureBaseline() {
   if (!S.stream) return null;
   const cam = view.el('cam');
   if (cam.readyState < 2 || !cam.videoWidth) return null;
@@ -132,6 +171,45 @@ export function captureBaseline() {
   snap.height = h;
   const ctx = snap.getContext('2d');
   ctx.drawImage(cam, 0, 0, w, h);
+
+  // Quality validation: detect blank, covered or pitch-black feeds
+  const quality = inspectFrameQuality(ctx, w, h);
+
+  if (quality.meanLuma < 25) {
+    S.baseline = null;
+    Vault.remove('qz.baseline');
+    view.setText('cal-face', 'Feed Too Dark / Covered');
+    toast('Baseline Rejected', 'Camera feed is too dark or covered. Please open your camera shutter and ensure adequate lighting.', 'danger', 7000);
+    logEvent('warn', 'PROCTOR', `Optical baseline rejected: feed too dark/covered (luma=${quality.meanLuma.toFixed(1)}/255)`);
+    if (hooks.onCalibrationChange) hooks.onCalibrationChange();
+    return null;
+  }
+
+  if (quality.stdDev < 8 || (quality.meanLuma > 240 && quality.stdDev < 15)) {
+    S.baseline = null;
+    Vault.remove('qz.baseline');
+    view.setText('cal-face', 'Blank Camera Detected');
+    toast('Baseline Rejected', 'Camera feed appears blank or uniform. Please ensure your camera is uncovered and showing your face.', 'danger', 7000);
+    logEvent('warn', 'PROCTOR', `Optical baseline rejected: uniform/blank sensor feed (stdDev=${quality.stdDev.toFixed(1)})`);
+    if (hooks.onCalibrationChange) hooks.onCalibrationChange();
+    return null;
+  }
+
+  if (cocoModel) {
+    try {
+      const preds = await cocoModel.detect(cam);
+      const persons = preds.filter((p) => p.class.toLowerCase() === 'person' && p.score >= 0.4);
+      if (persons.length === 0 && (quality.meanLuma < 45 || quality.stdDev < 16)) {
+        S.baseline = null;
+        Vault.remove('qz.baseline');
+        view.setText('cal-face', 'No Candidate Detected');
+        toast('Baseline Rejected', 'No candidate detected in camera feed. Please position your face clearly in front of the camera.', 'danger', 7000);
+        logEvent('warn', 'PROCTOR', 'Optical baseline rejected: no person detected in camera view');
+        if (hooks.onCalibrationChange) hooks.onCalibrationChange();
+        return null;
+      }
+    } catch (_) {}
+  }
 
   // Subtle institutional watermark
   ctx.fillStyle = 'rgba(15, 23, 42, 0.75)';

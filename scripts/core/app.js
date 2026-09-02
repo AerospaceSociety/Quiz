@@ -204,8 +204,29 @@ function wireControls() {
   const prevBtn = view.el('btn-prev');
   if (prevBtn) prevBtn.addEventListener('click', engine.prev);
 
+  function confirmAndSubmit() {
+    const answered = S.responses.filter((r) => r.sel && r.sel.length).length;
+    const total = CFG.questions.length;
+    const unanswered = total - answered;
+    const details = unanswered > 0
+      ? `You have answered ${answered} of ${total} questions (${unanswered} unanswered).`
+      : `You have answered all ${total} questions.`;
+
+    if (confirm(`Are you sure you want to submit your assessment?\n\n${details}\n\nOnce submitted, your responses cannot be modified.`)) {
+      engine.sealExam('CANDIDATE_SUBMIT');
+    }
+  }
+
   const nextBtn = view.el('btn-next');
-  if (nextBtn) nextBtn.addEventListener('click', engine.next);
+  if (nextBtn) {
+    nextBtn.addEventListener('click', () => {
+      if (S.idx === CFG.questions.length - 1) {
+        confirmAndSubmit();
+      } else {
+        engine.next();
+      }
+    });
+  }
 
   const clearBtn = view.el('btn-clear');
   if (clearBtn) clearBtn.addEventListener('click', engine.clearResponse);
@@ -215,13 +236,7 @@ function wireControls() {
 
   const submitBtn = view.el('btn-submit');
   if (submitBtn) {
-    submitBtn.addEventListener('click', () => {
-      const answered = S.responses.filter((r) => r.sel && r.sel.length).length;
-      const total = CFG.questions.length;
-      if (confirm(`Are you sure you want to submit your assessment?\n\nYou have answered ${answered} of ${total} questions. Your choices will be submitted to JotForm.`)) {
-        engine.sealExam('CANDIDATE_SUBMIT');
-      }
-    });
+    submitBtn.addEventListener('click', confirmAndSubmit);
   }
 
   // Dossier actions

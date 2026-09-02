@@ -143,12 +143,15 @@ export function buildQuestionSession() {
   const raw = CFG.rawQuestions || [];
 
   let selected = [];
+  const modules = CFG.modules || [];
+
   if (poolCfg.enabled) {
-    const modules = CFG.modules || [];
     modules.forEach((mod) => {
       const inMod = raw.filter((q) => q.catId === mod.id);
-      // Shuffle within module
-      const shuffled = [...inMod].sort(() => Math.random() - 0.5);
+      // Reshuffle questions only within this section/module
+      const shuffled = (poolCfg.shuffleQuestions !== false)
+        ? [...inMod].sort(() => Math.random() - 0.5)
+        : [...inMod];
       const take = Math.min(shuffled.length, poolCfg.itemsPerModule || 5);
       selected.push(...shuffled.slice(0, take));
     });
@@ -160,13 +163,19 @@ export function buildQuestionSession() {
       selected.push(...remaining.slice(0, poolCfg.totalItemsPerSession - selected.length));
     }
   } else {
-    selected = [...raw];
+    // Group all by module in module order, shuffling only within each module
+    modules.forEach((mod) => {
+      const inMod = raw.filter((q) => q.catId === mod.id);
+      const shuffled = (poolCfg.shuffleQuestions !== false)
+        ? [...inMod].sort(() => Math.random() - 0.5)
+        : [...inMod];
+      selected.push(...shuffled);
+    });
+    const extra = raw.filter((q) => !selected.includes(q));
+    selected.push(...extra);
   }
 
-  // Shuffle final question order
-  if (poolCfg.shuffleQuestions !== false) {
-    selected.sort(() => Math.random() - 0.5);
-  }
+  // NOTE: Do NOT sort across modules — reshuffling is strictly within each section.
 
   // Shuffle options for each question while preserving option metadata
   CFG.questions = selected.map((q, i) => {
