@@ -4,8 +4,17 @@
     "event": "CelesteCon 2026",
     "round": "Round 1 — Online Qualifier",
     "organiser": "AEROSS — The Aerospace Society, Delhi Public School R.K. Puram",
-    "build": "2026.08.31",
+    "build": "2026.09.03",
     "contact": "aeross@dpsrkp.net"
+  },
+
+  "schedule": {
+    "title": "CelesteCon 2026 Qualifier Lounge",
+    "startAt": "2026-09-03T10:00:00Z",
+    "stopAt": "2026-09-03T10:45:00Z",
+    "durationSeconds": 2700,
+    "waitingRoomSeconds": 45,
+    "allowAdminOverride": true
   },
 
   "exam": {
@@ -15,8 +24,31 @@
     "clockTickMs": 250,
     "autoSubmitOnExpiry": true,
     "allowFreeNavigation": true,
-    "shuffleQuestions": false,
-    "shuffleOptions": false
+    "shuffleQuestions": true,
+    "shuffleOptions": true
+  },
+
+  "questionPool": {
+    "enabled": true,
+    "totalItemsPerSession": 20,
+    "itemsPerModule": 5,
+    "shuffleQuestions": true,
+    "shuffleOptions": true
+  },
+
+  "accessCodes": {
+    "enabled": true,
+    "validCodes": [
+      "CELESTE2026",
+      "AEROSS-QZ-01",
+      "AEROSS-QZ-02",
+      "AEROSS-QZ-03",
+      "DPSRKP-QZ-26",
+      "QUALIFIER-2026",
+      "DEMO-ACCESS-26",
+      "QUIZZITCH-VIP"
+    ],
+    "pattern": "^(CC26|QZ|AEROSS)-[A-Z0-9]{4,8}$"
   },
 
   "security": {
@@ -40,13 +72,25 @@
     "enabled": true,
     "allowDegradedMode": true,
     "requireBaselineSnapshot": true,
+    "objectRecognition": {
+      "enabled": true,
+      "sampleIntervalMs": 1200,
+      "minConfidence": 0.55,
+      "prohibitedClasses": [
+        "cell phone",
+        "book",
+        "laptop",
+        "tv",
+        "remote"
+      ]
+    },
     "sampleIntervalMs": 250,
     "sampleWidth": 128,
     "sampleHeight": 96,
     "absenceFrames": 16,
     "multiFaceFrames": 14,
     "gadgetFrames": 8,
-    "flagCooldownMs": 20000,
+    "flagCooldownMs": 15000,
     "flagsPerStrike": 3,
     "heartbeatEveryFrames": 240,
     "video": { "idealWidth": 640, "idealHeight": 480, "facingMode": "user" }
@@ -56,29 +100,20 @@
     "standard": {
       "label": "STANDARD SINGLE",
       "marks": "+2 / 0",
-      "correct": 2,
-      "incorrect": 0,
-      "unattempted": 0,
       "multi": false,
-      "note": ""
+      "note": "Single-choice item. Select one option."
     },
     "highstakes": {
       "label": "HIGH-STAKES SINGLE",
       "marks": "+2 / −1",
-      "correct": 2,
-      "incorrect": -1,
-      "unattempted": 0,
       "multi": false,
-      "note": "NEGATIVE MARKING ACTIVE · an incorrect response deducts 1 mark. An unattempted item scores 0."
+      "note": "Negative marking active: incorrect responses receive a deduction."
     },
     "multi": {
       "label": "MULTIPLE CORRECT",
       "marks": "+4 / −2",
-      "correct": 4,
-      "incorrect": -2,
-      "unattempted": 0,
       "multi": true,
-      "note": "MULTI-SELECT ITEM · select every option that applies. A partial or excess selection is scored as incorrect (−2). An unattempted item scores 0."
+      "note": "Multi-select item: select all options that apply."
     }
   },
 
@@ -123,16 +158,12 @@
   },
 
   "briefing": [
-    "<b>Duration.</b> 45 minutes on a synchronised countdown. The paper auto-submits at T‑00:00.",
-    "<b>Display lock.</b> The terminal must remain in fullscreen. Exiting opens a 10-second re-dock window.",
-    "<b>Focus discipline.</b> Switching tabs, windows or applications is logged instantly and costs one strike.",
-    "<b>Strike ledger.</b> Three strikes trigger automatic lockout and forced submission of the paper.",
-    "<b>Optical presence.</b> Your face must remain in frame. Absence, second profiles and device glare are flagged.",
-    "<b>Input sandbox.</b> Right-click, copy, cut, paste, selection, print and developer shortcuts are disabled.",
-    "<b>Marking.</b> Three schemes run in the same paper: +2/0 standard, +2/−1 high-stakes, +4/−2 multiple-correct.",
-    "<b>Navigation.</b> Free movement across all four modules; responses may be cleared or flagged for review.",
-    "<b>Audit.</b> Every anomaly is timestamped and printed into your post-test dossier for the invigilation panel.",
-    "<b>Integrity.</b> No external material, second screen, headset or assistance of any kind is permitted."
+    "<b>Timed Assessment:</b> 45-minute synchronized window. Answers will auto-submit when time expires.",
+    "<b>Fullscreen Security:</b> The examination must remain in fullscreen mode throughout the test.",
+    "<b>Focus Discipline:</b> Navigating away from the window or switching tabs is flagged in the integrity log.",
+    "<b>Proctoring & AI Recognition:</b> Webcam feed is monitored for candidate presence and unauthorized devices (phones, books, secondary screens).",
+    "<b>No Answer Keys Stored:</b> Responses are recorded securely and submitted directly to JotForm upon completion.",
+    "<b>Free Navigation:</b> You may navigate freely across modules, review responses, and flag questions before final submission."
   ],
 
   "jotform": {

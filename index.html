@@ -8,9 +8,14 @@
 <meta name="description" content="Quizzitch — secure online examination portal for CelesteCon 2026, AEROSS, Delhi Public School R.K. Puram.">
 <title>Quizzitch · CelesteCon 2026 — Secure Assessment Portal</title>
 
+<!-- CelesteCon #26 Typography -->
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Anton&family=IBM+Plex+Mono:ital,wght@0,400;0,500;0,600;0,700;1,400&family=Inter:wght@300;400;500;600;700&family=Oswald:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+
+<!-- TensorFlow.js & COCO-SSD for On-Device Object Recognition -->
+<script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.20.0/dist/tf.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd@2.2.3"></script>
 
 <link rel="stylesheet" href="styles/base.css">
 <link rel="stylesheet" href="styles/layout.css">
@@ -24,7 +29,7 @@
 <div class="screen-mesh" aria-hidden="true"></div>
 
 <!-- ══════════════════════════════════════════════════════════════════════
-     TOP HUD — persistent mission bar
+     TOP INSTITUTIONAL HUD
      ══════════════════════════════════════════════════════════════════ -->
 <header class="hud" id="hud">
   <div class="hud__brand">
@@ -36,15 +41,15 @@
   </div>
 
   <div class="hud__clock" id="clock" role="timer" aria-live="off">
-    <span class="hud__clock-cap" id="clock-cap">Mission Clock</span>
-    <span class="hud__clock-val" id="clock-val">T‑45:00</span>
+    <span class="hud__clock-cap" id="clock-cap">Session Clock</span>
+    <span class="hud__clock-val" id="clock-val">45:00</span>
   </div>
 
   <div class="hud__meta">
-    <span class="badge badge--accent" id="badge-round">Round 1</span>
+    <span class="badge badge--accent" id="badge-round">Round 1 Qualifier</span>
     <span class="badge badge--muted" id="badge-cand">CAND · <b>—</b></span>
     <span class="badge badge--live" id="badge-stage"><i class="dot dot--pulse"></i> Pre-flight</span>
-    <div class="strikes" id="strikes" title="Security strike ledger — three strikes trigger lockout" aria-label="Strike ledger">
+    <div class="strikes" id="strikes" title="Proctoring strike ledger — three strikes trigger lockout" aria-label="Strike ledger">
       <span class="strikes__pip" data-i="1">1</span>
       <span class="strikes__pip" data-i="2">2</span>
       <span class="strikes__pip" data-i="3">3</span>
@@ -54,167 +59,212 @@
 
 
 <!-- ══════════════════════════════════════════════════════════════════════
-     STAGE 0 — CANDIDATE VERIFICATION & INSTRUCTIONS
+     STAGE 0 — CANDIDATE AUTHENTICATION & PROCTORING CALIBRATION
+     (Step 1 System Readiness completely removed as requested)
      ══════════════════════════════════════════════════════════════════ -->
 <main class="screen" id="screen-preflight" aria-label="Candidate Verification">
   <div class="wrap stack">
 
     <section class="hero">
-      <p class="eyebrow">CelesteCon #26 · AEROSS · DPS R.K. Puram</p>
+      <p class="eyebrow">CelesteCon 2026 · AEROSS · Delhi Public School R.K. Puram</p>
       <div class="hero__tags">
         <span class="badge badge--accent-solid">Official Assessment Portal</span>
-        <span class="badge badge--outline" id="hero-duration">45:00 · 24 items</span>
-        <span class="badge badge--outline" id="hero-build">Build —</span>
+        <span class="badge badge--outline" id="hero-duration">45 Minutes · 20 Questions</span>
+        <span class="badge badge--outline" id="hero-build">Build 2026.09</span>
       </div>
-      <h1 class="hero__title">Candidate <span>Verification</span> &amp; Setup</h1>
+      <h1 class="hero__title">Candidate <span>Authentication</span> &amp; Setup</h1>
       <p class="hero__sub">
-        Welcome to the Quizzitch 2026 assessment. Please complete the verification steps below to ensure
-        system compatibility, confirm your registration details, and calibrate the proctoring monitor before
-        launching the examination.
+        Please complete authentication with your unique access code, confirm your registration details,
+        and calibrate your optical proctoring link before entering the examination waiting lounge.
       </p>
       <div class="hero__strip" id="hero-modules"></div>
     </section>
 
     <div class="grid grid--2 grid--stretch">
 
-      <!-- STEP 01 — SYSTEM READINESS -->
-      <section class="panel" id="gate-diag-panel">
-        <header class="panel__head">
-          <h2 class="panel__title">Step 1 — System Readiness</h2>
-          <span class="badge badge--muted" id="diag-summary">Scanning…</span>
-        </header>
-        <div class="panel__body">
-          <ul class="diag" id="diag-list"></ul>
-          <div class="kv-strip">
-            <span>Platform <b id="diag-node">—</b></span>
-            <span>Display <b id="diag-raster">—</b></span>
-            <span>Locale <b id="diag-locale">—</b></span>
-            <span>Timezone <b id="diag-tz">—</b></span>
-          </div>
-        </div>
-      </section>
-
-      <!-- STEP 02 — CANDIDATE INFORMATION -->
+      <!-- STEP 01 — CANDIDATE AUTHENTICATION & UNIQUE CODE -->
       <section class="panel">
         <header class="panel__head">
-          <h2 class="panel__title">Step 2 — Candidate Information</h2>
-          <span class="badge badge--muted">Registry</span>
+          <h2 class="panel__title">Step 1 — Identity &amp; Access Code Verification</h2>
+          <span class="badge badge--muted" id="reg-badge">Verification</span>
         </header>
         <div class="panel__body">
+          <div class="field field--code">
+            <label for="in-code">Unique Access Code <span style="color:#F43F5E">*</span></label>
+            <input id="in-code" type="text" autocomplete="off" spellcheck="false" maxlength="24"
+                   placeholder="e.g. CELESTE2026 or AEROSS-QZ-01">
+            <p class="field__hint" id="hint-code">Enter the unique code provided in your CelesteCon invitation ticket</p>
+          </div>
+
           <div class="field">
-            <label for="in-name">Candidate Full Name</label>
+            <label for="in-name">Candidate Full Name <span style="color:#F43F5E">*</span></label>
             <input id="in-name" type="text" autocomplete="off" spellcheck="false" maxlength="60"
                    placeholder="Full Name as registered">
           </div>
+
           <div class="field-row">
             <div class="field">
-              <label for="in-id">Registration ID</label>
+              <label for="in-id">Registration ID <span style="color:#F43F5E">*</span></label>
               <input id="in-id" type="text" autocomplete="off" spellcheck="false" maxlength="20"
                      placeholder="CC26-QZ-0000">
               <p class="field__hint" id="hint-id">Format CC26-QZ-XXXX</p>
             </div>
             <div class="field">
-              <label for="in-grade">Class / Grade</label>
+              <label for="in-grade">Class / Grade <span style="color:#F43F5E">*</span></label>
               <select id="in-grade">
                 <option value="">— Select Class —</option>
               </select>
             </div>
           </div>
+
           <div class="field">
-            <label for="in-school">School / Institution</label>
+            <label for="in-school">School / Institution <span style="color:#F43F5E">*</span></label>
             <input id="in-school" type="text" autocomplete="off" spellcheck="false" maxlength="80"
                    placeholder="Delhi Public School, R.K. Puram">
           </div>
+
           <div class="kv-strip">
             <span>Session Ref <b id="sess-id">—</b></span>
-            <span>Timestamp <b id="sess-issued">—</b></span>
+            <span>Security <b id="sess-sec">JotForm Cloud Direct</b></span>
+          </div>
+        </div>
+      </section>
+
+      <!-- STEP 02 — OPTICAL PROCTORING & DEVICE CALIBRATION -->
+      <section class="panel">
+        <header class="panel__head">
+          <h2 class="panel__title">Step 2 — Optical Proctoring &amp; AI Calibration</h2>
+          <span class="badge badge--muted" id="optic-state">Sensor Inactive</span>
+        </header>
+        <div class="panel__body">
+          <div class="grid grid--2 grid--tight">
+            <div>
+              <div class="optic optic--idle" id="optic-preflight">
+                <p class="optic__placeholder" id="optic-placeholder">
+                  Webcam unattached<br>
+                  <span>Click below to grant camera access for proctoring</span>
+                </p>
+                <span class="optic__rec" id="preflight-rec" hidden><i class="dot dot--pulse"></i> Sensor Active</span>
+              </div>
+              <div class="btn-row" style="margin-top:14px;">
+                <button class="btn btn--primary btn--sm" id="btn-cam" type="button">Enable Camera Feed</button>
+                <button class="btn btn--ghost btn--sm" id="btn-snap" type="button" disabled>Capture Baseline Photo</button>
+              </div>
+              <p class="note">
+                Webcam is analyzed locally on-device for face presence and prohibited items (cell phones, secondary screens).
+                No video stream is stored locally.
+              </p>
+            </div>
+
+            <div>
+              <figure class="snapshot" id="snapshot">
+                <figcaption class="snapshot__empty" id="snap-empty">Baseline photo not yet captured</figcaption>
+                <img id="snap-img" alt="Baseline candidate capture" hidden>
+              </figure>
+              <div class="meters meters--compact" style="padding:0; margin-top:10px;">
+                <div class="meter-cell"><span class="meter-cell__k">Sensor</span><span class="meter-cell__v meter-cell__v--sm" id="cal-device">—</span></div>
+                <div class="meter-cell"><span class="meter-cell__k">Resolution</span><span class="meter-cell__v" id="cal-res">—</span></div>
+                <div class="meter-cell"><span class="meter-cell__k">AI Recognition</span><span class="meter-cell__v is-ok" id="cal-ai">COCO-SSD Ready</span></div>
+                <div class="meter-cell"><span class="meter-cell__k">Face Lock</span><span class="meter-cell__v" id="cal-face">—</span></div>
+              </div>
+            </div>
           </div>
         </div>
       </section>
     </div>
 
-    <!-- STEP 03 — PROCTORING SETUP -->
+    <!-- STEP 03 — PROTOCOL BRIEFING -->
     <section class="panel">
       <header class="panel__head">
-        <h2 class="panel__title">Step 3 — Web-Proctoring Verification</h2>
-        <span class="badge badge--muted" id="optic-state">Sensor Inactive</span>
-      </header>
-      <div class="panel__body">
-        <div class="grid grid--2 grid--tight">
-          <div>
-            <div class="optic optic--idle" id="optic-preflight">
-              <p class="optic__placeholder" id="optic-placeholder">
-                Webcam sensor unattached<br>
-                <span>Click below to grant camera access for proctoring</span>
-              </p>
-              <span class="optic__brackets" aria-hidden="true"><i></i><i></i><i></i><i></i></span>
-              <span class="optic__reticle" aria-hidden="true"></span>
-              <span class="optic__rec" id="preflight-rec" hidden><i class="dot dot--pulse"></i> Camera Active</span>
-            </div>
-            <div class="btn-row" style="margin-top:14px;">
-              <button class="btn btn--accent btn--sm" id="btn-cam" type="button">Enable Camera Feed</button>
-              <button class="btn btn--ghost btn--sm" id="btn-snap" type="button" disabled>Capture Baseline Photo</button>
-            </div>
-            <p class="note">
-              Camera feeds are processed locally on your device for session verification. Summary telemetry
-              and the baseline frame are securely attached to your submission.
-            </p>
-          </div>
-
-          <div>
-            <figure class="snapshot" id="snapshot">
-              <figcaption class="snapshot__empty" id="snap-empty">Baseline photo not yet captured</figcaption>
-              <img id="snap-img" alt="Baseline candidate capture" hidden>
-              <span class="optic__brackets" id="snap-frame" hidden aria-hidden="true"><i></i><i></i><i></i><i></i></span>
-            </figure>
-            <div class="meters meters--compact">
-              <div class="meter-cell"><span class="meter-cell__k">Sensor</span><span class="meter-cell__v meter-cell__v--sm" id="cal-device">—</span></div>
-              <div class="meter-cell"><span class="meter-cell__k">Resolution</span><span class="meter-cell__v" id="cal-res">—</span></div>
-              <div class="meter-cell"><span class="meter-cell__k">Luminance</span><span class="meter-cell__v" id="cal-luma">—</span></div>
-              <div class="meter-cell"><span class="meter-cell__k">Face Lock</span><span class="meter-cell__v" id="cal-face">—</span></div>
-            </div>
-          </div>
-        </div>
-      </div>
-    </section>
-
-    <!-- STEP 04 — PROTOCOL BRIEFING -->
-    <section class="panel">
-      <header class="panel__head">
-        <h2 class="panel__title">Step 4 — Examination Protocol &amp; Consent</h2>
-        <span class="badge badge--muted" id="brief-badge">45:00 · 24 items</span>
+        <h2 class="panel__title">Step 3 — Examination Protocol &amp; Candidate Honor Code</h2>
+        <span class="badge badge--muted" id="brief-badge">45:00 · 20 Items</span>
       </header>
       <div class="panel__body">
         <ol class="rules" id="rules-list"></ol>
         <label class="ack" for="ack">
           <input type="checkbox" id="ack">
           <span>
-            <b>Candidate Acknowledgment:</b> I hereby acknowledge the CelesteCon 2026 examination rules and consent to
-            active web-proctoring for the duration of this assessment. I confirm that I am attempting this paper
-            independently without unauthorized aids.
+            <b>Candidate Honor Acknowledgment:</b> I hereby acknowledge the CelesteCon 2026 examination rules and consent to
+            on-device optical proctoring. I confirm that I will attempt this paper independently without unauthorized aids or devices.
           </span>
         </label>
       </div>
     </section>
 
-    <!-- LAUNCH ACTION -->
+    <!-- PROCEED TO WAITING ROOM ACTION -->
     <section class="launchbar">
       <div>
         <p class="launchbar__cap">Verification Status</p>
         <div class="gatelist" id="gate-list">
-          <span class="badge badge--muted" data-gate="diag">1. Diagnostics</span>
+          <span class="badge badge--muted" data-gate="code">1. Access Code</span>
           <span class="badge badge--muted" data-gate="registry">2. Information</span>
           <span class="badge badge--muted" data-gate="optic">3. Webcam</span>
-          <span class="badge badge--muted" data-gate="ack">4. Protocol</span>
+          <span class="badge badge--muted" data-gate="ack">4. Honor Code</span>
         </div>
         <p class="launchbar__note" id="gate-note" hidden></p>
       </div>
       <button class="btn btn--primary btn--xl" id="btn-launch" type="button" disabled>
-        Begin Assessment <span class="btn__key">Enter</span>
+        Proceed to Waiting Room ▶
       </button>
     </section>
 
-    <p class="footnote" id="foot-preflight">Quizzitch Official Assessment Portal · CelesteCon 2026 · AEROSS</p>
+    <p class="footnote" id="foot-preflight">Quizzitch Assessment Portal · CelesteCon 2026 · AEROSS</p>
+  </div>
+</main>
+
+
+<!-- ══════════════════════════════════════════════════════════════════════
+     STAGE 0.5 — SYNCHRONIZED WAITING ROOM LOUNGE (WAYGROUND / QUIZZLY STYLE)
+     ══════════════════════════════════════════════════════════════════ -->
+<main class="screen" id="screen-lounge" hidden aria-label="Assessment Waiting Lounge">
+  <div class="wrap">
+    <div class="lounge">
+      <div class="lounge-card">
+        <span class="badge badge--accent-solid" style="margin-bottom:16px;">Synchronized Assessment Lounge</span>
+        <h1 style="font-size:32px; font-weight:700; margin-bottom:10px;">Waiting for Synchronized Start</h1>
+        <p style="color:var(--ink-3); font-size:15px; max-width:600px; margin:0 auto 20px;">
+          Your credentials and optical link are verified. All candidates will start and stop at the exact same moment.
+          Questions are dynamically pooled and shuffled from the question bank.
+        </p>
+
+        <div class="lounge__countdown">
+          <span class="lounge__timer-label">Synchronized Start In</span>
+          <span class="lounge__timer-clock" id="lounge-clock">00:45</span>
+        </div>
+
+        <div class="lounge__grid">
+          <div class="lounge__cell">
+            <span class="lounge__cell-k">Candidate</span>
+            <span class="lounge__cell-v" id="lounge-cand-name">—</span>
+          </div>
+          <div class="lounge__cell">
+            <span class="lounge__cell-k">Registration ID</span>
+            <span class="lounge__cell-v" id="lounge-cand-id">—</span>
+          </div>
+          <div class="lounge__cell">
+            <span class="lounge__cell-k">Access Token</span>
+            <span class="lounge__cell-v" id="lounge-cand-code" style="color:#60A5FA;">—</span>
+          </div>
+          <div class="lounge__cell">
+            <span class="lounge__cell-k">Proctoring Status</span>
+            <span class="lounge__cell-v" style="color:#34D399;">Active · AI Scanner Ready</span>
+          </div>
+        </div>
+
+        <div style="display:flex; align-items:center; justify-content:center; gap:16px; flex-wrap:wrap; margin-top:24px;">
+          <div class="lounge__pulse">
+            <i class="dot dot--pulse" style="background:#60A5FA;"></i>
+            <span>Lounge Connected &bull; Synchronizing with Invigilation Master Clock</span>
+          </div>
+        </div>
+
+        <div style="margin-top:32px; padding-top:24px; border-top:1px solid var(--border-sub); display:flex; align-items:center; justify-content:center; gap:14px;">
+          <button class="btn btn--primary btn--xl" id="btn-lounge-start" type="button">
+            Start Assessment Now (Invigilator / Test Override)
+          </button>
+        </div>
+      </div>
+    </div>
   </div>
 </main>
 
@@ -222,7 +272,7 @@
 <!-- ══════════════════════════════════════════════════════════════════════
      STAGE 1 / 2 — LIVE ASSESSMENT WORKSPACE
      ══════════════════════════════════════════════════════════════════ -->
-<main class="screen" id="screen-exam" hidden aria-label="Assessment workspace">
+<main class="screen" id="screen-exam" hidden aria-label="Assessment Workspace">
   <div class="workspace">
 
     <!-- ── LEFT PROCTOR RAIL ── -->
@@ -231,32 +281,30 @@
       <section class="panel panel--flush">
         <header class="panel__head panel__head--accent">
           <h2 class="panel__title">Proctoring Feed</h2>
-          <span class="badge badge--accent" id="hud-link"><i class="dot dot--pulse"></i> Live</span>
+          <span class="badge badge--live" id="hud-link"><i class="dot dot--pulse"></i> AI Monitored</span>
         </header>
         <div class="optic optic--live" id="optic-live">
           <p class="optic__placeholder" id="live-placeholder">Webcam feed active</p>
-          <span class="optic__brackets" aria-hidden="true"><i></i><i></i><i></i><i></i></span>
-          <span class="optic__box" id="track" hidden style="left:30%;top:22%;width:40%;height:48%">
-            <i></i><i></i><i></i><i></i>
-            <b id="track-label">Candidate · In Frame</b>
+          <span class="optic__obj-box" id="obj-track" hidden>
+            <b id="obj-track-label">Candidate · 96%</b>
           </span>
-          <span class="optic__rec"><i class="dot dot--pulse"></i> Monitored</span>
+          <span class="optic__rec"><i class="dot dot--pulse"></i> Live Proctor</span>
         </div>
         <div class="statusstrip">
-          <span class="chip chip--accent" id="tb-face">Subject Lock <b>—</b></span>
-          <span class="chip chip--accent" id="tb-stab">Stability <b>—</b></span>
-          <span class="chip chip--accent" id="tb-gadget">Device Scan <b>—</b></span>
+          <span class="chip chip--accent" id="tb-face">Subject Lock: <b>Verified</b></span>
+          <span class="chip chip--accent" id="tb-gadget">Objects: <b>Clean</b></span>
+          <span class="chip chip--accent" id="tb-stab">Stability: <b>Normal</b></span>
         </div>
       </section>
 
       <section class="panel panel--flush">
         <header class="panel__head">
-          <h2 class="panel__title">Session Metrics</h2>
+          <h2 class="panel__title">Session Telemetry</h2>
           <span class="badge badge--muted" id="tel-clock">--:--:--</span>
         </header>
         <div class="meters">
           <div class="meter-cell">
-            <span class="meter-cell__k">Alerts</span><span class="meter-cell__v is-bad" id="tel-strikes">0 / 3</span>
+            <span class="meter-cell__k">Alerts / Strikes</span><span class="meter-cell__v is-bad" id="tel-strikes">0 / 3</span>
             <span class="meter"><i class="is-bad" id="tel-strikes-bar" style="width:0%"></i></span>
           </div>
           <div class="meter-cell">
@@ -264,19 +312,11 @@
             <span class="meter"><i id="tel-blur-bar" style="width:0%"></i></span>
           </div>
           <div class="meter-cell">
-            <span class="meter-cell__k">Presence</span><span class="meter-cell__v is-ok" id="tel-presence">—</span>
-            <span class="meter"><i id="tel-presence-bar" style="width:0%"></i></span>
-          </div>
-          <div class="meter-cell">
-            <span class="meter-cell__k">Movement</span><span class="meter-cell__v" id="tel-motion">—</span>
-            <span class="meter"><i id="tel-motion-bar" style="width:0%"></i></span>
-          </div>
-          <div class="meter-cell">
-            <span class="meter-cell__k">Answered</span><span class="meter-cell__v" id="tel-answered">0 / 24</span>
+            <span class="meter-cell__k">Questions Answered</span><span class="meter-cell__v is-ok" id="tel-answered">0 / 20</span>
             <span class="meter"><i class="is-ok" id="tel-answered-bar" style="width:0%"></i></span>
           </div>
           <div class="meter-cell">
-            <span class="meter-cell__k">Flagged</span><span class="meter-cell__v is-warn" id="tel-flagged">0</span>
+            <span class="meter-cell__k">Flagged for Review</span><span class="meter-cell__v is-warn" id="tel-flagged">0</span>
             <span class="meter"><i class="is-warn" id="tel-flagged-bar" style="width:0%"></i></span>
           </div>
         </div>
@@ -284,7 +324,7 @@
 
       <section class="panel panel--flush">
         <header class="panel__head">
-          <h2 class="panel__title">Questions Overview</h2>
+          <h2 class="panel__title">Question Navigator</h2>
           <span class="badge badge--muted" id="matrix-cat">M-01</span>
         </header>
         <div class="matrix-tabs" id="matrix-tabs" role="tablist"></div>
@@ -299,7 +339,7 @@
 
       <section class="panel panel--flush">
         <header class="panel__head">
-          <h2 class="panel__title">Integrity Activity Log</h2>
+          <h2 class="panel__title">Proctoring Integrity Log</h2>
           <span class="badge badge--danger" id="log-count">0</span>
         </header>
         <div class="logbox" id="logbox" role="log" aria-live="off"></div>
@@ -312,10 +352,9 @@
     <section class="qcard" id="qcard" aria-live="polite">
       <header class="qcard__meta">
         <div class="qcard__meta-left">
-          <span class="qnum" id="q-num">01<sup>/24</sup></span>
+          <span class="qnum" id="q-num">01<sup>/20</sup></span>
           <span class="badge badge--outline" id="q-cat">Module</span>
           <span class="badge badge--accent" id="q-scheme">Scheme</span>
-          <span class="badge badge--muted" id="q-marks">+2 / 0</span>
         </div>
         <div class="qcard__meta-right">
           <span class="badge badge--muted" id="q-timer">Δt 00:00</span>
@@ -332,11 +371,11 @@
       <footer class="qcard__actions">
         <div class="btn-row">
           <button class="btn btn--ghost btn--sm" id="btn-prev" type="button">◀ Prev <span class="btn__key">P</span></button>
-          <button class="btn btn--ghost btn--sm" id="btn-clear" type="button">Clear <span class="btn__key">C</span></button>
+          <button class="btn btn--ghost btn--sm" id="btn-clear" type="button">Clear Choice <span class="btn__key">C</span></button>
           <button class="btn btn--ghost btn--sm" id="btn-flag" type="button">⚑ Flag <span class="btn__key">F</span></button>
         </div>
         <div class="btn-row">
-          <span class="badge badge--muted" id="q-progress">00 / 24 answered</span>
+          <span class="badge badge--muted" id="q-progress">00 / 20 answered</span>
           <button class="btn btn--primary btn--sm" id="btn-next" type="button">Save &amp; Proceed ▶ <span class="btn__key">N</span></button>
         </div>
       </footer>
@@ -350,6 +389,7 @@
 
 <!-- ══════════════════════════════════════════════════════════════════════
      STAGE 3 — POST-EXAM SUBMISSION RECEIPT
+     (Answers not stored locally, recorded to JotForm)
      ══════════════════════════════════════════════════════════════════ -->
 <main class="screen" id="screen-dossier" hidden aria-label="Assessment Receipt">
   <div class="wrap stack">
@@ -363,74 +403,43 @@
         <dl class="dossier-head__id">
           <div><dt>Candidate</dt><dd id="dos-name">—</dd></div>
           <div><dt>Registration</dt><dd id="dos-id">—</dd></div>
+          <div><dt>Unique Token</dt><dd id="dos-code" style="color:#60A5FA;">—</dd></div>
           <div><dt>Institution</dt><dd id="dos-school">—</dd></div>
           <div><dt>Submitted</dt><dd id="dos-stamp">—</dd></div>
+          <div><dt>JotForm Ref</dt><dd id="dos-jf-id" style="color:#34D399;">RECORDED</dd></div>
         </dl>
       </div>
 
-      <p class="verdict" id="dos-verdict">Submission Recorded to JotForm</p>
+      <p class="verdict" id="dos-verdict">Assessment Successfully Recorded to JotForm</p>
 
       <div class="scoregrid">
-        <div class="scoregrid__cell"><span class="k">Total Score</span><span class="v" id="dos-score">0<small>/56</small></span></div>
-        <div class="scoregrid__cell"><span class="k">Accuracy</span><span class="v" id="dos-acc">0<small>%</small></span></div>
+        <div class="scoregrid__cell"><span class="k">Questions Attempted</span><span class="v" id="dos-answered">0<small>/20</small></span></div>
         <div class="scoregrid__cell"><span class="k">Time Consumed</span><span class="v" id="dos-time">00:00</span></div>
-        <div class="scoregrid__cell"><span class="k">Security Flags</span><span class="v" id="dos-inc">0</span></div>
+        <div class="scoregrid__cell"><span class="k">Proctoring Alerts</span><span class="v" id="dos-inc">0</span></div>
+        <div class="scoregrid__cell"><span class="k">Integrity Status</span><span class="v" id="dos-verdict-tag" style="color:#34D399;">VERIFIED</span></div>
       </div>
     </section>
 
-    <div class="grid grid--2">
-      <section class="panel panel--flush">
-        <header class="panel__head"><h2 class="panel__title">Module Breakdown</h2></header>
-        <div class="tablewrap">
-          <table class="table">
-            <thead>
-              <tr><th>Module</th><th class="num">Att</th><th class="num">Cor</th><th class="num">Inc</th><th class="num">Score</th><th style="width:120px">Dist</th></tr>
-            </thead>
-            <tbody id="dos-modules"></tbody>
-          </table>
-        </div>
-      </section>
-
-      <section class="panel">
-        <header class="panel__head panel__head--accent"><h2 class="panel__title">Proctoring Telemetry</h2></header>
-        <div class="panel__body">
-          <div class="grid grid--2 grid--tight">
-            <figure class="snapshot">
-              <img id="dos-snap" alt="Baseline capture" hidden>
-              <figcaption class="snapshot__empty" id="dos-snap-empty">No baseline on record</figcaption>
-              <span class="optic__brackets" aria-hidden="true"><i></i><i></i><i></i><i></i></span>
-            </figure>
-            <dl class="kv">
-              <dt>Presence</dt><dd id="dos-presence">—</dd>
-              <dt>Stability</dt><dd id="dos-stability">—</dd>
-              <dt>Samples</dt><dd id="dos-frames">—</dd>
-              <dt>Optical Flags</dt><dd id="dos-optflags">—</dd>
-              <dt>Focus Loss</dt><dd id="dos-blur">—</dd>
-              <dt>Fullscreen Exit</dt><dd id="dos-fs">—</dd>
-            </dl>
-          </div>
-        </div>
-      </section>
-    </div>
-
+    <!-- ITEM LEVEL USER CHOICE SUMMARY (No answer keys) -->
     <section class="panel panel--flush">
       <header class="panel__head">
-        <h2 class="panel__title">Item-Level Response Review</h2>
-        <span class="badge badge--muted" id="dos-itemcount">24 items</span>
+        <h2 class="panel__title">Submitted Response Registry</h2>
+        <span class="badge badge--muted" id="dos-itemcount">20 items</span>
       </header>
       <div class="tablewrap">
         <table class="table">
           <thead>
-            <tr><th class="num">#</th><th>Module</th><th>Scheme</th><th class="num">Response</th><th class="num">Key</th><th>Result</th><th class="num">Marks</th><th class="num">Δt</th><th class="num">Visits</th></tr>
+            <tr><th class="num">#</th><th>Module</th><th>Item ID</th><th>Selected Choice</th><th class="num">Δt</th><th class="num">Visits</th></tr>
           </thead>
           <tbody id="dos-items"></tbody>
         </table>
       </div>
     </section>
 
+    <!-- PROCTORING INCIDENT LOG -->
     <section class="panel panel--flush">
       <header class="panel__head">
-        <h2 class="panel__title">Proctoring Incident Log</h2>
+        <h2 class="panel__title">Proctoring Incident &amp; Telemetry Log</h2>
         <span class="badge badge--danger" id="dos-logcount">0 entries</span>
       </header>
       <div class="tablewrap">
@@ -445,144 +454,33 @@
 
     <div class="launchbar no-print">
       <div class="kv-strip">
-        <span>Submission Hash <b id="dos-hash">—</b></span>
-        <span>Generated <b id="dos-gen">—</b></span>
+        <span>Submission Signature <b id="dos-hash">—</b></span>
+        <span>Transmission Timestamp <b id="dos-gen">—</b></span>
       </div>
       <div class="btn-row">
-        <button class="btn btn--ghost" id="btn-export" type="button">Export JSON Record</button>
-        <button class="btn btn--accent" id="btn-print" type="button">Print / Save PDF</button>
-        <button class="btn btn--primary" id="btn-restart" type="button">Start New Session</button>
+        <button class="btn btn--ghost btn--sm" id="btn-export-json" type="button">Download Submission JSON</button>
+        <button class="btn btn--primary btn--sm" id="btn-print" type="button">Print / Save PDF</button>
       </div>
     </div>
 
-    <p class="footnote">
-      Official Assessment Portal · CelesteCon 2026 · AEROSS · Delhi Public School R.K. Puram
-    </p>
+    <p class="footnote">CelesteCon 2026 Assessment Integrity Dossier &bull; AEROSS &bull; Delhi Public School, R.K. Puram</p>
   </div>
 </main>
 
 
-<!-- ══════════════════════════════════════════════════════════════════════
-     OVERLAYS
-     ══════════════════════════════════════════════════════════════════ -->
+<!-- Hidden off-screen canvas elements and video element -->
+<video id="cam" autoplay playsinline muted hidden></video>
+<canvas id="an-canvas" hidden></canvas>
+<canvas id="snap-canvas" hidden></canvas>
 
-<!-- Boot / fatal configuration error -->
-<div class="overlay" id="ov-boot" hidden>
-  <div class="modal modal--danger" role="alertdialog" aria-labelledby="ov-boot-title">
-    <header class="modal__head"><h2 class="modal__title" id="ov-boot-title">Configuration error</h2></header>
-    <div class="modal__body">
-      <p id="ov-boot-msg">—</p>
-      <pre class="pre" id="ov-boot-detail"></pre>
-    </div>
+<div class="toast" id="toast" role="status" aria-live="polite">
+  <div class="toast__icon" id="toast-icon"></div>
+  <div class="toast__content">
+    <strong id="toast-title"></strong>
+    <p id="toast-body"></p>
   </div>
 </div>
-
-<!-- Focus / visibility breach -->
-<div class="overlay overlay--alarm" id="ov-focus" hidden>
-  <div class="modal modal--danger" role="alertdialog" aria-labelledby="ov-focus-title">
-    <header class="modal__head">
-      <h2 class="modal__title" id="ov-focus-title">Focus breach detected</h2>
-      <span class="badge badge--danger">SEC-VIO</span>
-    </header>
-    <div class="modal__body">
-      <p id="ov-focus-desc">
-        The examination window lost focus or the tab was switched. This event has been timestamped and
-        written to your permanent audit dossier.
-      </p>
-      <p class="countdown" id="ov-focus-count">15<small>seconds to acknowledge — failure adds a further strike</small></p>
-      <dl class="kv">
-        <dt>Event</dt><dd id="ov-focus-kind">VISIBILITY_CHANGE</dd>
-        <dt>Clock</dt><dd id="ov-focus-clock">—</dd>
-        <dt>Strikes</dt><dd id="ov-focus-strikes">1 / 3</dd>
-      </dl>
-    </div>
-    <footer class="modal__foot">
-      <button class="btn btn--primary" id="btn-ack-focus" type="button">Acknowledge &amp; resume</button>
-    </footer>
-  </div>
-</div>
-
-<!-- Fullscreen re-dock -->
-<div class="overlay overlay--alarm" id="ov-fs" hidden>
-  <div class="modal modal--danger" role="alertdialog" aria-labelledby="ov-fs-title">
-    <header class="modal__head">
-      <h2 class="modal__title" id="ov-fs-title">Display lock breached</h2>
-      <span class="badge badge--danger">FS-EXIT</span>
-    </header>
-    <div class="modal__body">
-      <p>
-        Fullscreen containment has been released. Re-dock the portal before the counter expires or a
-        security strike will be registered against this session.
-      </p>
-      <p class="countdown" id="ov-fs-count">10<small>seconds to re-dock</small></p>
-    </div>
-    <footer class="modal__foot">
-      <button class="btn btn--primary btn--xl" id="btn-redock" type="button">Re-enter fullscreen</button>
-    </footer>
-  </div>
-</div>
-
-<!-- Lockout -->
-<div class="overlay" id="ov-lock" hidden>
-  <div class="modal modal--danger" role="alertdialog" aria-labelledby="ov-lock-title">
-    <header class="modal__head">
-      <h2 class="modal__title" id="ov-lock-title">Portal lockout</h2>
-      <span class="badge badge--danger">Disqualified</span>
-    </header>
-    <div class="modal__body">
-      <p>
-        The security strike ledger has been exhausted. The paper has been sealed and force-submitted at its
-        current state. A complete incident record has been compiled for the AEROSS invigilation panel.
-      </p>
-      <dl class="kv">
-        <dt>Trigger</dt><dd id="ov-lock-trigger">—</dd>
-        <dt>Clock</dt><dd id="ov-lock-clock">—</dd>
-        <dt>Incidents</dt><dd id="ov-lock-count">—</dd>
-      </dl>
-    </div>
-    <footer class="modal__foot">
-      <button class="btn btn--ghost" id="btn-lock-dossier" type="button">View audit dossier</button>
-    </footer>
-  </div>
-</div>
-
-<!-- Submit confirmation -->
-<div class="overlay" id="ov-submit" hidden>
-  <div class="modal" role="dialog" aria-labelledby="ov-submit-title">
-    <header class="modal__head">
-      <h2 class="modal__title" id="ov-submit-title">Finalise Submission</h2>
-      <span class="badge badge--accent">JotForm Sync</span>
-    </header>
-    <div class="modal__body">
-      <p>Once confirmed, your responses and proctoring telemetry will be sealed and submitted directly to JotForm. This action cannot be reversed.</p>
-      <dl class="kv">
-        <dt>Answered</dt><dd id="sub-answered">—</dd>
-        <dt>Unattempted</dt><dd id="sub-unatt">—</dd>
-        <dt>Flagged</dt><dd id="sub-flag">—</dd>
-        <dt>Time Left</dt><dd id="sub-left">—</dd>
-        <dt>Alerts</dt><dd id="sub-strikes">—</dd>
-      </dl>
-    </div>
-    <footer class="modal__foot">
-      <button class="btn btn--ghost" id="btn-sub-cancel" type="button">◀ Return to Assessment</button>
-      <button class="btn btn--primary" id="btn-sub-confirm" type="button">Confirm &amp; Submit to JotForm</button>
-    </footer>
-  </div>
-</div>
-
-<!-- Toast rail -->
-<div class="toasts" id="toasts" aria-live="polite" aria-atomic="false"></div>
-
-<!-- Hidden media pipeline -->
-<video id="cam" autoplay playsinline muted class="visually-hidden" aria-hidden="true"></video>
-<canvas id="an-canvas" width="128" height="96" hidden></canvas>
-<canvas id="snap-canvas" width="640" height="480" hidden></canvas>
 
 <script type="module" src="scripts/core/app.js"></script>
-<noscript>
-  <p style="padding:24px;font-family:sans-serif;color:#F8FAFC">
-    Quizzitch requires JavaScript. Enable it and reload this page.
-  </p>
-</noscript>
 </body>
 </html>

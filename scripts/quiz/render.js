@@ -1,45 +1,45 @@
 /* ==========================================================================
    QUIZZITCH — quiz/render.js
-   Every DOM write in the portal happens here. The module subscribes to the
-   state bus and repaints; it never mutates application state directly — user
-   gestures are re-published as intents for quiz/engine.js to act on.
+   Modern DOM renderer for Waiting Room, Assessment Workspace & Dossier.
    ========================================================================== */
 
 import {
   CFG, S, bus, EV, Vault,
   scheme, moduleOf, clamp, esc,
-  answeredCount, flaggedCount, elapsedSeconds
+  answeredCount, flaggedCount
 } from '../core/state.js';
 
 import { pad, mmss, wallTime, stampUTC } from '../utils/timer.js';
 
-/* --- 01 · DOM ACCESS ------------------------------------------------------ */
+/* --- 01 · DOM ACCESS CACHE ------------------------------------------------ */
 const cache = new Map();
 
-/** Cached getElementById. */
 export function el(id) {
   if (!cache.has(id)) cache.set(id, document.getElementById(id));
   return cache.get(id);
 }
 
-const setText = (id, value) => { const n = el(id); if (n) n.textContent = value; };
-const setHTML = (id, value) => { const n = el(id); if (n) n.innerHTML = value; };
-const show = (id, visible) => { const n = el(id); if (n) n.hidden = !visible; };
+export const setText = (id, value) => { const n = el(id); if (n) n.textContent = value; };
+export const setHTML = (id, value) => { const n = el(id); if (n) n.innerHTML = value; };
+export const show = (id, visible) => { const n = el(id); if (n) n.hidden = !visible; };
 
-/* --- 02 · STATIC SCAFFOLDING (built once from config) --------------------- */
+const setBar = (id, pct) => {
+  const n = el(id);
+  if (n) n.style.width = `${clamp(pct, 0, 100).toFixed(1)}%`;
+};
+
+/* --- 02 · STATIC SCAFFOLDING ---------------------------------------------- */
 export function buildStaticUI() {
   const s = CFG.settings;
 
-  /* Hero + briefing badges */
-  setText('hero-duration', `${mmss(s.exam.durationSeconds)} · ${CFG.questions.length} items`);
+  /* Hero & Briefing */
+  setText('hero-duration', `${Math.round(s.exam.durationSeconds / 60)} Minutes · ${CFG.questions.length || 20} Questions`);
   setText('hero-build', `Build ${s.meta.build}`);
-  setText('brief-badge', `${mmss(s.exam.durationSeconds)} · ${CFG.maxScore} marks · ${CFG.questions.length} items`);
+  setText('brief-badge', `${Math.round(s.exam.durationSeconds / 60)}:00 · ${CFG.questions.length || 20} Items`);
   setText('dos-round', s.meta.round);
   setText('badge-round', s.meta.round.split('—')[0].trim());
-  setText('foot-preflight',
-    `${s.meta.portal} secure portal · build ${s.meta.build} · ${s.meta.organiser} · all processing local to this device`);
 
-  /* Module strip on the hero */
+  /* Module strip on hero */
   const strip = el('hero-modules');
   if (strip) {
     strip.innerHTML = '';
@@ -52,64 +52,63 @@ export function buildStaticUI() {
     });
   }
 
-  /* Grade options */
+  /* Grade selection */
   const grade = el('in-grade');
-  if (grade) {
+  if (grade && grade.children.length <= 1) {
     s.registry.grades.forEach((g) => {
       const opt = document.createElement('option');
       opt.value = g;
-      opt.textContent = g;
+      opt.textContent = `Class ${g}`;
       grade.appendChild(opt);
     });
   }
 
-  /* Registry defaults + hints */
+  /* Registry defaults */
   const school = el('in-school');
-  if (school && s.registry.defaultSchool) school.value = s.registry.defaultSchool;
+  if (school && !school.value && s.registry.defaultSchool) school.value = s.registry.defaultSchool;
   const idIn = el('in-id');
   if (idIn) idIn.placeholder = s.registry.idPlaceholder;
-  setText('hint-id', `Format ${s.registry.idPlaceholder.replace(/0/g, 'X')}`);
 
-  /* Protocol briefing */
+  /* Protocol briefing list */
   const rules = el('rules-list');
   if (rules) {
     rules.innerHTML = '';
     s.briefing.forEach((line) => {
       const li = document.createElement('li');
-      li.innerHTML = line;   // authored content from settings.json, not user input
+      li.innerHTML = line;
       rules.appendChild(li);
     });
   }
 
-  /* Clock face + telemetry seeds */
-  setText('clock-val', 'T‑' + mmss(s.exam.durationSeconds));
-  setText('tel-answered', `0 / ${CFG.questions.length}`);
+  /* Clock & initial meters */
+  setText('clock-val', mmss(s.exam.durationSeconds));
+  setText('tel-answered', `0 / ${CFG.questions.length || 20}`);
   setText('tel-strikes', `0 / ${s.security.maxStrikes}`);
-  setText('q-progress', `00 / ${pad(CFG.questions.length)} answered`);
-  setHTML('dos-score', `0<small>/${CFG.maxScore}</small>`);
+  setText('q-progress', `00 / ${pad(CFG.questions.length || 20)} answered`);
 
   buildMatrixTabs();
 }
 
-function buildMatrixTabs() {
+export function buildMatrixTabs() {
   const host = el('matrix-tabs');
   if (!host) return;
   host.innerHTML = '';
   CFG.modules.forEach((m) => {
     const b = document.createElement('button');
     b.type = 'button';
+    b.className = 'matrix-tab' + (m.id === S.activeModule ? ' is-active' : '');
     b.dataset.cat = String(m.id);
     b.setAttribute('role', 'tab');
-    b.title = m.name;
-    b.innerHTML = `<span>${esc(m.code)}</span>${esc(m.short)}`;
+    b.textContent = `${m.code} · ${m.short}`;
     b.addEventListener('click', () => bus.emit(EV.INTENT_MODULE, m.id));
     host.appendChild(b);
   });
 }
 
-/* --- 03 · STAGE ROUTER (screen visibility) -------------------------------- */
+/* --- 03 · STAGE ROUTER ---------------------------------------------------- */
 export function paintStage(stage) {
   show('screen-preflight', stage === 'preflight');
+  show('screen-lounge', stage === 'lounge');
   show('screen-exam', stage === 'live');
   show('screen-dossier', stage === 'sealed');
 
@@ -118,73 +117,43 @@ export function paintStage(stage) {
 
   if (stage === 'preflight') {
     badge.className = 'badge badge--live';
-    badge.innerHTML = '<i class="dot dot--pulse"></i> Pre-flight';
+    badge.innerHTML = '<i class="dot dot--pulse"></i> Candidate Setup';
+  } else if (stage === 'lounge') {
+    badge.className = 'badge badge--accent';
+    badge.innerHTML = '<i class="dot dot--pulse"></i> Waiting Lounge';
+
+    /* Populate lounge card data */
+    setText('lounge-cand-name', S.candidate.name || 'Candidate');
+    setText('lounge-cand-id', S.candidate.id || 'CC26-QZ-0000');
+    setText('lounge-cand-code', S.candidate.code || 'VERIFIED');
   } else if (stage === 'live') {
-    badge.className = 'badge badge--danger';
-    badge.innerHTML = '<i class="dot dot--pulse"></i> Live';
+    badge.className = 'badge badge--live';
+    badge.innerHTML = '<i class="dot dot--pulse"></i> Assessment Active';
+    setHTML('badge-cand', `CAND · <b>${esc(S.candidate.id || '—')}</b>`);
   } else {
-    const dq = S.verdict === 'DISQUALIFIED';
-    badge.className = `badge ${dq ? 'badge--danger' : 'badge--ok'}`;
-    badge.innerHTML = `<i class="dot"></i> ${dq ? 'Disqualified' : 'Sealed'}`;
+    badge.className = 'badge badge--accent';
+    badge.innerHTML = '<i class="dot"></i> Submitted';
   }
 }
 
-/* --- 04 · PRE-FLIGHT DIAGNOSTICS ----------------------------------------- */
-export function addDiagRow(probe, index) {
-  const list = el('diag-list');
-  if (!list) return;
-  const li = document.createElement('li');
-  li.id = `diagrow-${probe.key}`;   // namespaced: "diag-<key>" collides with the kv-strip ids
-  li.innerHTML =
-    `<span class="ix">${pad(index + 1)}</span>` +
-    `<span class="nm">${esc(probe.name)}<em>${esc(probe.detail)}</em></span>` +
-    `<span class="st st--wait">Probing…</span>`;
-  list.appendChild(li);
+export function paintLoungeClock(seconds) {
+  setText('lounge-clock', mmss(Math.max(0, seconds)));
 }
 
-export function setDiagResult(key, result) {
-  const row = document.getElementById(`diagrow-${key}`);
-  if (!row) return;
-  const cell = row.querySelector('.st');
-  if (!cell) return;
-  const cls = result.ok ? (result.warn ? 'st--warn' : 'st--ok') : 'st--fail';
-  const glyph = result.ok ? (result.warn ? '▲' : '●') : '✕';
-  cell.className = `st ${cls}`;
-  cell.textContent = `${glyph} ${result.text}`;
-}
-
-export function setDiagSummary(fails, warns) {
-  const badge = el('diag-summary');
-  if (!badge) return;
-  badge.className = 'badge ' + (fails ? 'badge--danger' : warns ? 'badge--warn' : 'badge--ok');
-  badge.textContent = fails
-    ? `${fails} fault${fails > 1 ? 's' : ''}`
-    : warns ? `${warns} advisory` : 'System Verified & Ready';
-}
-
-export function paintEnvironment(env) {
-  setText('diag-node', env.node);
-  setText('diag-raster', env.raster);
-  setText('diag-locale', env.locale);
-  setText('diag-tz', env.offset);
-}
-
-export function paintSession(sessionId) {
-  setText('sess-id', sessionId);
-  setText('sess-issued', stampUTC());
-}
-
-/* --- 05 · GATE LEDGER ----------------------------------------------------- */
+/* --- 04 · GATE LEDGER & VALIDITY ------------------------------------------ */
 export function paintGates(gates, note) {
   const host = el('gate-list');
   if (host) {
     host.querySelectorAll('[data-gate]').forEach((node) => {
       const ok = !!gates[node.dataset.gate];
-      node.className = `badge ${ok ? 'badge--ok' : 'badge--muted'}`;
+      node.className = `badge ${ok ? 'badge--live' : 'badge--muted'}`;
     });
   }
   const launch = el('btn-launch');
-  if (launch) launch.disabled = !Object.values(gates).every(Boolean);
+  if (launch) {
+    const allOk = Object.values(gates).every(Boolean);
+    launch.disabled = !allOk;
+  }
 
   const noteNode = el('gate-note');
   if (noteNode) {
@@ -202,12 +171,17 @@ export function markFieldValidity(id, valid, hintId, hintText) {
     const hint = el(hintId);
     if (hint) {
       hint.classList.toggle('is-bad', !valid);
+      hint.classList.toggle('is-ok', valid);
       if (hintText) hint.textContent = hintText;
     }
   }
 }
 
-/* --- 06 · QUESTION CARD --------------------------------------------------- */
+export function paintSession(sessionId) {
+  setText('sess-id', sessionId);
+}
+
+/* --- 05 · QUESTION CARD --------------------------------------------------- */
 export function renderQuestion() {
   const q = CFG.questions[S.idx];
   if (!q) return;
@@ -218,10 +192,8 @@ export function renderQuestion() {
   setHTML('q-num', `${pad(S.idx + 1)}<sup>/${pad(CFG.questions.length)}</sup>`);
   setText('q-cat', `${mod.code} · ${mod.name}`);
   setText('q-scheme', sc.label);
-  setText('q-marks', sc.marks);
   setText('q-text', q.question);
 
-  /* Supplement: the item's own note, otherwise the scheme's standing note. */
   const supp = (q.supplement && q.supplement.trim()) || sc.note || '';
   const suppNode = el('q-supp');
   if (suppNode) {
@@ -231,13 +203,20 @@ export function renderQuestion() {
 
   const state = el('q-state');
   if (state) {
-    if (r.flagged) { state.textContent = 'Flagged for review'; state.className = 'badge badge--warn'; }
-    else if (r.sel.length) { state.textContent = 'Answered'; state.className = 'badge badge--ok'; }
-    else { state.textContent = 'Unanswered'; state.className = 'badge badge--outline'; }
+    if (r.flagged) {
+      state.textContent = 'Flagged for Review';
+      state.className = 'badge badge--warn';
+    } else if (r.sel.length) {
+      state.textContent = 'Answered';
+      state.className = 'badge badge--live';
+    } else {
+      state.textContent = 'Unvisited';
+      state.className = 'badge badge--outline';
+    }
   }
 
   const flagBtn = el('btn-flag');
-  if (flagBtn) flagBtn.textContent = r.flagged ? '⚑ Unflag' : '⚑ Flag';
+  if (flagBtn) flagBtn.textContent = r.flagged ? '⚑ Unflag' : '⚑ Flag for Review';
 
   const prevBtn = el('btn-prev');
   if (prevBtn) prevBtn.disabled = S.idx === 0;
@@ -245,12 +224,11 @@ export function renderQuestion() {
   const nextBtn = el('btn-next');
   if (nextBtn) {
     nextBtn.textContent = S.idx === CFG.questions.length - 1
-      ? 'Save & return to 01 ▶'
-      : 'Save & proceed ▶';
+      ? 'Review First Question ▶'
+      : 'Save & Proceed ▶';
   }
 
   renderOptions(q, r, sc);
-  renderProgress();
 }
 
 function renderOptions(q, r, sc) {
@@ -258,56 +236,39 @@ function renderOptions(q, r, sc) {
   if (!host) return;
   host.innerHTML = '';
 
-  q.options.forEach((text, oi) => {
-    const selected = r.sel.indexOf(oi) > -1;
-    const li = document.createElement('li');
-    li.className = 'opt' + (selected ? ' is-selected' : '');
-    li.dataset.multi = String(!!sc.multi);
-    li.dataset.index = String(oi);
-    li.setAttribute('role', sc.multi ? 'checkbox' : 'radio');
-    li.setAttribute('aria-checked', selected ? 'true' : 'false');
-    li.setAttribute('tabindex', '0');
-    li.innerHTML =
-      `<span class="opt__key">${CFG.letters[oi] || oi + 1}</span>` +
-      `<span class="opt__text">${esc(text)}</span>`;
+  const multi = sc.multi;
 
-    li.addEventListener('click', () => bus.emit(EV.INTENT_PICK, oi));
-    li.addEventListener('keydown', (e) => {
-      if (e.key === ' ' || e.key === 'Enter') {
-        e.preventDefault();
-        bus.emit(EV.INTENT_PICK, oi);
-      }
-    });
+  q.options.forEach((optText, i) => {
+    const isPicked = r.sel.includes(i);
+    const li = document.createElement('li');
+    li.className = 'opt' + (isPicked ? ' is-selected' : '');
+    li.dataset.idx = String(i);
+
+    const mark = document.createElement('span');
+    mark.className = 'opt__marker';
+    mark.textContent = CFG.letters[i] || String(i + 1);
+
+    const txt = document.createElement('span');
+    txt.className = 'opt__text';
+    txt.textContent = optText;
+
+    li.appendChild(mark);
+    li.appendChild(txt);
+
+    li.addEventListener('click', () => bus.emit(EV.INTENT_PICK, i));
     host.appendChild(li);
   });
 }
 
-export function renderProgress() {
-  const answered = answeredCount();
-  const flagged = flaggedCount();
-  const total = CFG.questions.length;
-
-  setText('q-progress', `${pad(answered)} / ${pad(total)} answered`);
-  setText('tel-answered', `${answered} / ${total}`);
-  setBar('tel-answered-bar', (answered / total) * 100);
-  setText('tel-flagged', String(flagged));
-  setBar('tel-flagged-bar', (flagged / total) * 100);
-}
-
-function setBar(id, pct) {
-  const node = el(id);
-  if (node) node.style.width = `${clamp(pct, 0, 100).toFixed(1)}%`;
-}
-
-/* --- 07 · QUESTION MATRIX ------------------------------------------------- */
+/* --- 06 · QUESTION MATRIX ------------------------------------------------- */
 export function renderMatrix() {
   const mod = moduleOf(S.activeModule);
   setText('matrix-cat', `${mod.code} · ${mod.short}`);
 
   const tabs = el('matrix-tabs');
   if (tabs) {
-    tabs.querySelectorAll('button').forEach((b) => {
-      b.classList.toggle('is-on', Number(b.dataset.cat) === S.activeModule);
+    tabs.querySelectorAll('.matrix-tab').forEach((b) => {
+      b.classList.toggle('is-active', Number(b.dataset.cat) === S.activeModule);
     });
   }
 
@@ -320,31 +281,45 @@ export function renderMatrix() {
     const r = S.responses[i];
     const b = document.createElement('button');
     b.type = 'button';
-    b.className = 'matrix__cell'
+    b.className = 'matrix-cell'
       + (r.sel.length ? ' is-answered' : '')
       + (r.flagged ? ' is-flagged' : '')
       + (i === S.idx ? ' is-current' : '');
     b.textContent = pad(i + 1);
-    b.title = `${moduleOf(q.catId).short} · ${scheme(q.scheme).label}`;
+    b.title = `Item ${i + 1}: ${moduleOf(q.catId).short}`;
     b.addEventListener('click', () => bus.emit(EV.INTENT_NAV, i));
     host.appendChild(b);
   });
 }
 
-/* --- 08 · HUD CLOCK & STRIKES -------------------------------------------- */
+export function renderProgress() {
+  const total = CFG.questions.length;
+  const answered = answeredCount();
+  const flagged = flaggedCount();
+
+  setText('tel-answered', `${answered} / ${total}`);
+  setBar('tel-answered-bar', (answered / total) * 100);
+
+  setText('tel-flagged', String(flagged));
+  setBar('tel-flagged-bar', (flagged / total) * 100);
+
+  setText('q-progress', `${pad(answered)} / ${pad(total)} answered`);
+}
+
+/* --- 07 · CLOCK & STRIKES ------------------------------------------------- */
 export function paintClock(remaining) {
   const s = CFG.settings.exam;
-  setText('clock-val', 'T‑' + mmss(remaining));
+  setText('clock-val', mmss(remaining));
 
   const node = el('clock');
   if (node) {
-    node.classList.toggle('is-crit', remaining <= s.criticalAtSeconds);
+    node.classList.toggle('is-bad', remaining <= s.criticalAtSeconds);
     node.classList.toggle('is-warn', remaining > s.criticalAtSeconds && remaining <= s.warnAtSeconds);
   }
 
   setText('tel-clock', wallTime());
 
-  if (S.qEnterTs) {
+  if (S.qEnterTs && S.responses[S.idx]) {
     const dwell = (S.responses[S.idx].timeMs + (performance.now() - S.qEnterTs)) / 1000;
     setText('q-timer', `Δt ${mmss(dwell)}`);
   }
@@ -355,7 +330,7 @@ export function paintStrikes() {
   const host = el('strikes');
   if (host) {
     host.querySelectorAll('.strikes__pip').forEach((pip, i) => {
-      pip.classList.toggle('is-hit', i < S.strikes);
+      pip.classList.toggle('is-armed', i < S.strikes);
     });
   }
   setText('tel-strikes', `${S.strikes} / ${max}`);
@@ -364,21 +339,19 @@ export function paintStrikes() {
 
 export function paintFocusCounter() {
   setText('tel-blur', String(S.blurCount));
-  setBar('tel-blur-bar', S.blurCount * 20);
+  setBar('tel-blur-bar', S.blurCount * 25);
 }
 
-/* --- 09 · SECURITY LOG & TOASTS ------------------------------------------ */
+/* --- 08 · SECURITY LOG & TOASTS ------------------------------------------- */
 export function appendLog(entry) {
   const box = el('logbox');
   if (box) {
     const line = document.createElement('div');
-    line.className = `logline sev-${entry.sev}`;
-    line.innerHTML =
-      `<span class="ts">${esc(entry.clock)}</span>` +
-      `<span class="msg">[${esc(entry.cls)}] ${esc(entry.msg)}</span>`;
+    line.className = `log-row is-${entry.level}`;
+    line.innerHTML = `<span style="opacity:0.6">${esc(entry.clock)}</span> <span>[${esc(entry.category)}] ${esc(entry.message)}</span>`;
     box.appendChild(line);
 
-    const capacity = CFG.settings.security.logDomCap;
+    const capacity = CFG.settings.security.logDomCap || 260;
     while (box.children.length > capacity) box.firstChild.remove();
     box.scrollTop = box.scrollHeight;
   }
@@ -386,113 +359,26 @@ export function appendLog(entry) {
 }
 
 export function showToast({ title, body, kind, ttl }) {
-  const rail = el('toasts');
-  if (!rail) return;
+  const toast = el('toast');
+  if (!toast) return;
 
-  const node = document.createElement('div');
-  node.className = 'toast' + (kind ? ` toast--${kind}` : '');
-  node.innerHTML =
-    `<div class="toast__head"><span>${esc(title)}</span><time>${wallTime()}</time></div>` +
-    `<div class="toast__body">${esc(body)}</div>`;
-  rail.appendChild(node);
+  setText('toast-title', title);
+  setText('toast-body', body);
+  toast.className = `toast toast--${kind} is-active`;
 
-  while (rail.children.length > 4) rail.firstChild.remove();
-
-  setTimeout(() => {
-    node.style.opacity = '0';
-    setTimeout(() => node.remove(), 320);
-  }, ttl || 6000);
+  clearTimeout(toast._timer);
+  toast._timer = setTimeout(() => {
+    toast.classList.remove('is-active');
+  }, ttl || 4500);
 }
 
-export function clearToasts() {
-  const rail = el('toasts');
-  if (rail) rail.innerHTML = '';
-}
-
-/* --- 10 · OPTICAL TELEMETRY ---------------------------------------------- */
-export function paintOptical(sample) {
-  const o = S.optic;
-
-  /* Pre-flight calibration read-outs */
-  if (S.stage === 'preflight') {
-    const luma = el('cal-luma');
-    if (luma) {
-      luma.textContent = `${Math.round(o.luma)} / 255`;
-      luma.className = 'meter-cell__v ' + (o.luma < 34 ? 'is-bad' : o.luma < 62 ? 'is-warn' : 'is-ok');
-    }
-    const face = el('cal-face');
-    if (face) {
-      face.textContent = sample.present
-        ? (sample.faces > 1 ? `${sample.faces} profiles` : 'Locked')
-        : 'No subject';
-      face.className = 'meter-cell__v ' + (sample.present ? (sample.faces > 1 ? 'is-warn' : 'is-ok') : 'is-bad');
-    }
-    return;
-  }
-
-  /* Live status strip */
-  const face = el('tb-face');
-  if (face) {
-    const label = sample.faces === 0 ? 'Absent' : sample.faces > 1 ? 'Multiple' : 'Locked';
-    face.innerHTML = `Subject lock <b>${label}</b>`;
-    face.className = 'chip ' + (sample.faces === 1 ? 'chip--accent' : 'chip--danger');
-  }
-
-  const stab = el('tb-stab');
-  if (stab) {
-    stab.innerHTML = `Optical stability <b>${o.stability.toFixed(1)}%</b>`;
-    stab.className = 'chip ' + (o.stability > 90 ? 'chip--accent' : o.stability > 72 ? 'chip--warn' : 'chip--danger');
-  }
-
-  const gadget = el('tb-gadget');
-  if (gadget) {
-    gadget.innerHTML = `Gadget scan <b>${sample.gadget ? 'Alert' : 'Clear'}</b>`;
-    gadget.className = 'chip ' + (sample.gadget ? 'chip--danger' : 'chip--accent');
-  }
-
-  /* Subject bounding box */
-  const box = el('track');
-  if (box) {
-    if (sample.present && o.box) {
-      box.hidden = false;
-      box.style.left = `${(o.box.x * 100).toFixed(1)}%`;
-      box.style.top = `${(o.box.y * 100).toFixed(1)}%`;
-      box.style.width = `${(o.box.w * 100).toFixed(1)}%`;
-      box.style.height = `${(o.box.h * 100).toFixed(1)}%`;
-      setText('track-label', `Subject 01 · L${Math.round(o.luma)} · E${(o.edges * 100).toFixed(0)}`);
-    } else {
-      box.hidden = true;
-    }
-  }
-
-  /* Meters */
-  const presence = el('tel-presence');
-  if (presence) {
-    presence.textContent = `${o.presencePct.toFixed(1)}%`;
-    presence.className = 'meter-cell__v ' + (o.presencePct > 92 ? 'is-ok' : o.presencePct > 75 ? 'is-warn' : 'is-bad');
-  }
-  const presenceBar = el('tel-presence-bar');
-  if (presenceBar) {
-    presenceBar.style.width = `${clamp(o.presencePct, 0, 100).toFixed(1)}%`;
-    presenceBar.className = o.presencePct > 92 ? 'is-ok' : o.presencePct > 75 ? 'is-warn' : 'is-bad';
-  }
-
-  const motionPct = clamp(o.motion * 5, 0, 100);
-  const motion = el('tel-motion');
-  if (motion) {
-    motion.textContent = o.motion.toFixed(2);
-    motion.className = 'meter-cell__v ' + (motionPct > 70 ? 'is-warn' : '');
-  }
-  setBar('tel-motion-bar', motionPct);
-}
-
-/* --- 11 · OPTICAL LINK STATE (pre-flight + live viewport chrome) --------- */
+/* --- 09 · OPTICAL & AI OBJECT RECOGNITION --------------------------------- */
 export function paintOpticState(mode, text) {
   const badge = el('optic-state');
   if (badge) {
     badge.textContent = text;
     badge.className = 'badge ' + ({
-      online: 'badge--ok',
+      online: 'badge--live',
       negotiating: 'badge--accent',
       refused: 'badge--danger',
       degraded: 'badge--warn'
@@ -504,136 +390,109 @@ export function mountCameraInto(hostId) {
   const host = el(hostId);
   const cam = el('cam');
   if (!host || !cam) return;
-  cam.classList.remove('visually-hidden');
+  cam.hidden = false;
   host.insertBefore(cam, host.firstChild);
 }
 
 export function paintBaseline(dataUrl) {
   const img = el('snap-img');
   if (img) { img.src = dataUrl; img.hidden = false; }
-  show('snap-frame', true);
   show('snap-empty', false);
   const btn = el('btn-snap');
-  if (btn) btn.textContent = 'Re-capture baseline';
+  if (btn) btn.textContent = 'Re-capture Baseline';
 }
 
-/* --- 12 · OVERLAYS -------------------------------------------------------- */
-export const overlay = {
-  open(id) { show(id, true); },
-  close(id) { show(id, false); },
-  bootError(message, detail) {
-    setText('ov-boot-msg', message);
-    setText('ov-boot-detail', detail || '');
-    show('ov-boot', true);
-  },
-  focusAlarm(kind, clockText, strikesText, seconds) {
-    setText('ov-focus-kind', kind);
-    setText('ov-focus-clock', clockText);
-    setText('ov-focus-strikes', strikesText);
-    this.focusCount(seconds);
-    show('ov-focus', true);
-  },
-  focusCount(seconds) {
-    setHTML('ov-focus-count',
-      `${Math.max(0, seconds)}<small>seconds to acknowledge — failure adds a further strike</small>`);
-  },
-  redockCount(seconds) {
-    setHTML('ov-fs-count', `${Math.max(0, seconds)}<small>seconds to re-dock</small>`);
-  },
-  lockout(trigger, clockText, criticalCount) {
-    setText('ov-lock-trigger', trigger);
-    setText('ov-lock-clock', clockText);
-    setText('ov-lock-count', `${criticalCount} critical`);
-    show('ov-lock', true);
-  },
-  submit() {
-    const answered = answeredCount();
-    const total = CFG.questions.length;
-    setText('sub-answered', `${answered} / ${total}`);
-    setText('sub-unatt', `${total - answered} items`);
-    setText('sub-flag', `${flaggedCount()} flagged`);
-    setText('sub-left', `${mmss(S.remaining)} remaining`);
-    setText('sub-strikes', `${S.strikes} / ${CFG.settings.security.maxStrikes}`);
-    show('ov-submit', true);
-  },
-  closeAll() {
-    ['ov-focus', 'ov-fs', 'ov-submit', 'ov-lock'].forEach((id) => show(id, false));
-  }
-};
+/** Updates the real-time AI object recognition tracking overlay */
+export function paintObjectDetection(detection) {
+  const box = el('obj-track');
+  const label = el('obj-track-label');
+  const tbGadget = el('tb-gadget');
+  const tbFace = el('tb-face');
 
-/* --- 13 · AUDIT DOSSIER --------------------------------------------------- */
+  if (!box || !detection) return;
+
+  if (detection.found) {
+    box.hidden = false;
+    box.style.left = `${(detection.x * 100).toFixed(1)}%`;
+    box.style.top = `${(detection.y * 100).toFixed(1)}%`;
+    box.style.width = `${(detection.w * 100).toFixed(1)}%`;
+    box.style.height = `${(detection.h * 100).toFixed(1)}%`;
+
+    if (detection.isProhibited) {
+      box.className = 'optic__obj-box is-prohibited';
+      label.textContent = `ALERT: ${detection.className.toUpperCase()} (${(detection.score * 100).toFixed(0)}%)`;
+      if (tbGadget) {
+        tbGadget.className = 'chip chip--flagged';
+        tbGadget.innerHTML = `Device Alert: <b>${detection.className}</b>`;
+      }
+    } else {
+      box.className = 'optic__obj-box';
+      label.textContent = `${detection.className} (${(detection.score * 100).toFixed(0)}%)`;
+      if (tbGadget) {
+        tbGadget.className = 'chip chip--accent';
+        tbGadget.innerHTML = `Objects: <b>Clean</b>`;
+      }
+    }
+  } else {
+    box.hidden = true;
+    if (tbGadget) {
+      tbGadget.className = 'chip chip--accent';
+      tbGadget.innerHTML = `Objects: <b>Clean</b>`;
+    }
+  }
+
+  if (tbFace) {
+    if (detection.personCount === 0) {
+      tbFace.className = 'chip chip--flagged';
+      tbFace.innerHTML = `Subject: <b>Absent</b>`;
+    } else if (detection.personCount > 1) {
+      tbFace.className = 'chip chip--flagged';
+      tbFace.innerHTML = `Subject: <b>Multiple Persons (${detection.personCount})</b>`;
+    } else {
+      tbFace.className = 'chip chip--accent';
+      tbFace.innerHTML = `Subject: <b>Verified (1 Person)</b>`;
+    }
+  }
+}
+
+/* --- 10 · SUBMISSION DOSSIER (NO ANSWERS STORED/REVEALED LOCALLY) ---------- */
 export function renderDossier(d) {
-  /* Header */
-  setText('dos-name', d.candidate.name || '—');
-  setText('dos-id', `${d.candidate.id || '—'} · Grade ${d.candidate.grade || '—'}`);
+  setText('dos-name', d.candidate.name || 'Candidate');
+  setText('dos-id', `${d.candidate.id || '—'} · Class ${d.candidate.grade || '—'}`);
+  setText('dos-code', d.candidate.code || 'VERIFIED');
   setText('dos-school', d.candidate.school || '—');
   setText('dos-stamp', stampUTC(new Date(d.meta.generated)));
+  setText('dos-jf-id', d.jotform?.id || 'RECORDED_TO_JOTFORM');
 
   const verdict = el('dos-verdict');
   if (verdict) {
     if (d.meta.verdict === 'DISQUALIFIED') {
-      verdict.textContent = `Disqualified — ${d.meta.dqReason}`;
-      verdict.className = 'verdict is-dq';
-    } else if (d.meta.submitReason === 'TIME_EXPIRY') {
-      verdict.textContent = 'Auto-submitted to JotForm at T‑00:00' + (d.meta.proctored ? '' : ' · unproctored session');
-      verdict.className = 'verdict is-warn';
+      verdict.textContent = `Submission Flagged & Transmitted to JotForm (Disqualified: ${d.meta.dqReason})`;
+      verdict.className = 'verdict is-bad';
     } else {
-      verdict.textContent = 'Assessment Sealed & Submitted to JotForm' + (d.meta.proctored ? '' : ' · unproctored session');
-      verdict.className = 'verdict' + (d.meta.proctored ? '' : ' is-warn');
+      verdict.textContent = 'Assessment Choices Successfully Recorded to JotForm';
+      verdict.className = 'verdict';
     }
   }
 
-  setHTML('dos-score', `${d.result.score}<small>/${d.result.max}</small>`);
-  setHTML('dos-acc', `${d.result.accuracyPct.toFixed(0)}<small>%</small>`);
-  setText('dos-time', mmss(d.result.timeConsumedSec));
-  setText('dos-inc', String(d.proctoring.incidents));
+  setText('dos-answered', `${d.summary.answeredCount} / ${d.summary.totalItems}`);
+  setText('dos-time', mmss(d.summary.timeConsumedSec));
+  setText('dos-inc', String(d.proctoring.strikes + d.proctoring.objectViolations));
+  setText('dos-verdict-tag', d.meta.verdict);
 
-  /* Module breakdown */
-  const modBody = el('dos-modules');
-  if (modBody) {
-    modBody.innerHTML = d.modules.map((m) => {
-      const pct = m.max ? clamp((m.marks / m.max) * 100, 0, 100) : 0;
-      return '<tr>'
-        + `<td><b>${esc(m.code)}</b> ${esc(m.short)}</td>`
-        + `<td class="num">${m.attempted}</td>`
-        + `<td class="num">${m.correct}</td>`
-        + `<td class="num">${m.incorrect}</td>`
-        + `<td class="num"><b>${m.marks}</b> / ${m.max}</td>`
-        + `<td><span class="bar"><i style="width:${pct.toFixed(0)}%"></i></span></td>`
-        + '</tr>';
-    }).join('');
-  }
-
-  /* Optical summary */
-  const p = d.proctoring;
-  setText('dos-presence', p.opticalSamples ? `${p.presencePct.toFixed(1)}% of samples` : 'No optical link');
-  setText('dos-stability', p.meanStabilityPct === null ? '—' : `${p.meanStabilityPct.toFixed(1)}% mean`);
-  setText('dos-frames', `${p.opticalSamples} samples @ ${p.sampleRateHz} Hz`);
-  setText('dos-optflags', `${p.opticalFlags} flag${p.opticalFlags === 1 ? '' : 's'}`);
-  setText('dos-blur', `${p.focusBreaches} breach${p.focusBreaches === 1 ? '' : 'es'}`);
-  setText('dos-fs', `${p.fullscreenReleases} release${p.fullscreenReleases === 1 ? '' : 's'}`);
-
-  const baseline = S.baseline || Vault.get('qz.baseline');
-  if (baseline) {
-    const img = el('dos-snap');
-    if (img) { img.src = baseline; img.hidden = false; }
-    show('dos-snap-empty', false);
-  }
-
-  /* Item-level review */
-  setText('dos-itemcount', `${d.items.length} items · ${d.result.max} marks`);
+  /* Item level choice registry - NO answer keys or correctness shown! */
+  setText('dos-itemcount', `${d.items.length} items recorded`);
   const itemBody = el('dos-items');
   if (itemBody) {
     itemBody.innerHTML = d.items.map((it) => {
-      const tag = it.status === 'CORRECT' ? 'tag--ok' : it.status === 'INCORRECT' ? 'tag--bad' : 'tag--skipped';
+      const choice = it.selectedText && it.selectedText.length
+        ? it.selectedText.join(', ')
+        : '<span style="color:var(--ink-4)">Unattempted</span>';
       return '<tr>'
-        + `<td class="num"><b>${pad(it.n)}</b>${it.flagged ? ' <span style="color:var(--warn)">⚑</span>' : ''}</td>`
+        + `<td class="num"><b>${pad(it.n)}</b></td>`
         + `<td>${esc(it.moduleShort)}</td>`
-        + `<td style="font-size:10.5px">${esc(it.schemeLabel)}</td>`
-        + `<td class="num">${esc(it.response)}</td>`
-        + `<td class="num">${esc(it.key)}</td>`
-        + `<td><span class="tag ${tag}">${it.status}</span></td>`
-        + `<td class="num"><b>${it.marks > 0 ? '+' : ''}${it.marks}</b></td>`
+        + `<td><code>${esc(it.questionId)}</code></td>`
+        + `<td>${esc(choice)}</td>`
         + `<td class="num">${mmss(it.seconds)}</td>`
         + `<td class="num">${it.visits}</td>`
         + '</tr>';
@@ -644,17 +503,14 @@ export function renderDossier(d) {
   setText('dos-logcount', `${d.incidents.length} entries`);
   const logBody = el('dos-log');
   if (logBody) {
-    const colour = {
-      crit: 'var(--danger)', warn: 'var(--warn)', ok: 'var(--ok)', scan: 'var(--accent-2)'
-    };
     logBody.innerHTML = d.incidents.map((l) => {
-      const c = colour[l.sev] || 'inherit';
+      const isCrit = l.level === 'crit';
       return '<tr>'
         + `<td class="num">${esc(l.clock)}</td>`
         + `<td class="num">${esc(l.wall)}</td>`
-        + `<td style="color:${c}"><b style="color:${c}">${esc(l.cls)}</b></td>`
-        + `<td style="color:${c}">${esc(l.msg)}</td>`
-        + `<td class="num">${l.strike ? '<span class="tag tag--bad">Yes</span>' : '—'}</td>`
+        + `<td><b>${esc(l.category)}</b></td>`
+        + `<td>${esc(l.message)}</td>`
+        + `<td class="num">${isCrit ? '<span style="color:#F43F5E">Yes</span>' : '—'}</td>`
         + '</tr>';
     }).join('');
   }
@@ -663,34 +519,7 @@ export function renderDossier(d) {
   setText('dos-gen', new Date(d.meta.generated).toLocaleString());
 }
 
-/** Re-labels the HUD clock once the paper is sealed. */
-export function paintSealedClock(consumedSeconds) {
-  setText('clock-cap', 'Time consumed');
-  setText('clock-val', mmss(consumedSeconds));
-  const node = el('clock');
-  if (node) node.classList.remove('is-warn', 'is-crit');
-}
-
-/* --- 14 · LIVE VIEWPORT DEGRADED STATE ------------------------------------ */
-export function paintDegradedViewport() {
-  const live = el('optic-live');
-  if (live) live.classList.add('is-degraded');
-
-  const link = el('hud-link');
-  if (link) {
-    link.className = 'badge badge--warn';
-    link.innerHTML = '<i class="dot"></i> Degraded';
-  }
-  setHTML('tb-face', 'Subject lock <b>No link</b>');
-  setHTML('tb-stab', 'Optical stability <b>N/A</b>');
-  setHTML('tb-gadget', 'Gadget scan <b>Unmonitored</b>');
-  ['tb-face', 'tb-stab', 'tb-gadget'].forEach((id) => {
-    const n = el(id);
-    if (n) n.className = 'chip chip--warn';
-  });
-}
-
-/* --- 15 · BUS SUBSCRIPTIONS ---------------------------------------------- */
+/* --- 11 · BIND RENDERER TO STATE BUS -------------------------------------- */
 export function bindRenderer() {
   bus.on(EV.STAGE, paintStage);
   bus.on(EV.LOG, appendLog);
@@ -700,9 +529,7 @@ export function bindRenderer() {
   bus.on(EV.MATRIX, renderMatrix);
   bus.on(EV.PROGRESS, renderProgress);
   bus.on(EV.CLOCK, ({ remaining }) => paintClock(remaining));
-  bus.on(EV.OPTIC, paintOptical);
+  bus.on(EV.LOUNGE_CLOCK, ({ remaining }) => paintLoungeClock(remaining));
+  bus.on(EV.OBJECT_DETECTED, paintObjectDetection);
   bus.on(EV.SEALED, renderDossier);
 }
-
-/* Exposed so other modules can reuse the same helpers without re-querying. */
-export { setText, setHTML, show, elapsedSeconds };

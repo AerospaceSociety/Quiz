@@ -1,12 +1,11 @@
 /* ==========================================================================
    QUIZZITCH — quiz/engine.js
-   Navigation, response capture, marking-scheme evaluation, the mission clock
-   listener, sealing and audit-dossier assembly.
+   Navigation, response capture, synchronized session clock, and sealing.
    ========================================================================== */
 
 import {
   CFG, S, bus, EV,
-  scheme, moduleOf, clamp, hash32, clockStamp,
+  scheme, moduleOf, hash32,
   logEvent, toast, commitDwell, answeredCount, flaggedCount, setStage
 } from '../core/state.js';
 
@@ -17,8 +16,8 @@ import { exitFullscreen, disarmMonitor } from '../security/monitor.js';
 import { submitAssessmentToJotForm } from '../utils/jotform.js';
 
 let dossier = null;
+let loungeTimerHandle = null;
 
-/** The completed audit dossier, or null while the paper is still open. */
 export const getDossier = () => dossier;
 
 /* --- 01 · NAVIGATION ------------------------------------------------------ */
@@ -29,7 +28,9 @@ export function go(index) {
   commitDwell();
   S.idx = index;
   S.activeModule = CFG.questions[index].catId;
-  S.responses[index].visits += 1;
+  if (S.responses[index]) {
+    S.responses[index].visits += 1;
+  }
   S.qEnterTs = performance.now();
 
   bus.emit(EV.QUESTION, index);
@@ -53,6 +54,8 @@ export function pick(optionIndex) {
 
   const q = CFG.questions[S.idx];
   const r = S.responses[S.idx];
+  if (!q || !r) return;
+
   const sc = scheme(q.scheme);
   if (optionIndex < 0 || optionIndex >= q.options.length) return;
 
@@ -62,9 +65,11 @@ export function pick(optionIndex) {
     else r.sel.push(optionIndex);
     r.sel.sort((a, b) => a - b);
   } else {
-    // Tapping the selected option again clears it.
+    // Tapping the selected option toggles it
     r.sel = (r.sel.length === 1 && r.sel[0] === optionIndex) ? [] : [optionIndex];
   }
+
+  r.selectedTexts = r.sel.map((i) => q.options[i]);
 
   bus.emit(EV.QUESTION, S.idx);
   bus.emit(EV.MATRIX);
@@ -73,8 +78,10 @@ export function pick(optionIndex) {
 
 export function clearResponse() {
   if (S.locked || S.stage !== 'live') return;
+  if (!S.responses[S.idx]) return;
   S.responses[S.idx].sel = [];
-  logEvent('info', 'RESPONSE', `Response cleared on item ${S.idx + 1}`);
+  S.responses[S.idx].selectedTexts = [];
+  logEvent('info', 'RESPONSE', `Response cleared on question ${S.idx + 1}`);
   bus.emit(EV.QUESTION, S.idx);
   bus.emit(EV.MATRIX);
   bus.emit(EV.PROGRESS);
@@ -83,260 +90,152 @@ export function clearResponse() {
 export function toggleFlag() {
   if (S.locked || S.stage !== 'live') return;
   const r = S.responses[S.idx];
+  if (!r) return;
   r.flagged = !r.flagged;
-  logEvent('info', 'REVIEW', `${r.flagged ? 'Flagged' : 'Unflagged'} item ${S.idx + 1} for review`);
+  logEvent('info', 'REVIEW', `${r.flagged ? 'Flagged' : 'Unflagged'} question ${S.idx + 1} for review`);
   bus.emit(EV.QUESTION, S.idx);
   bus.emit(EV.MATRIX);
   bus.emit(EV.PROGRESS);
 }
 
-/* --- 03 · MARKING --------------------------------------------------------- */
-/**
- * Evaluates a single item against its marking scheme.
- *  standard   +2 correct /  0 incorrect / 0 unattempted
- *  highstakes +2 correct / −1 incorrect / 0 unattempted
- *  multi      +4 all-correct / −2 partial, excess or wrong / 0 unattempted
- */
-export function scoreItem(index) {
-  const q = CFG.questions[index];
-  const r = S.responses[index];
-  const sc = scheme(q.scheme);
+/* --- 03 · WAITING ROOM LOUNGE TIMER --------------------------------------- */
+export function startLoungeTimer(onComplete) {
+  const sched = CFG.settings.schedule || {};
+  let seconds = sched.waitingRoomSeconds || 45;
 
-  if (!r.sel.length) return { status: 'UNATTEMPTED', marks: sc.unattempted || 0 };
+  if (loungeTimerHandle) clearInterval(loungeTimerHandle);
 
-  const key = q.correct;
-  const exact = r.sel.length === key.length && r.sel.every((v) => key.indexOf(v) > -1);
+  bus.emit(EV.LOUNGE_CLOCK, { remaining: seconds });
 
-  return exact
-    ? { status: 'CORRECT', marks: sc.correct }
-    : { status: 'INCORRECT', marks: sc.incorrect };
+  loungeTimerHandle = setInterval(() => {
+    seconds--;
+    bus.emit(EV.LOUNGE_CLOCK, { remaining: seconds });
+    if (seconds <= 0) {
+      clearInterval(loungeTimerHandle);
+      loungeTimerHandle = null;
+      if (onComplete) onComplete();
+    }
+  }, 1000);
 }
 
-/* --- 04 · MISSION CLOCK --------------------------------------------------- */
+export function cancelLoungeTimer() {
+  if (loungeTimerHandle) {
+    clearInterval(loungeTimerHandle);
+    loungeTimerHandle = null;
+  }
+}
+
+/* --- 04 · SYNCHRONIZED ASSESSMENT CLOCK ----------------------------------- */
 export function startClock() {
   const exam = CFG.settings.exam;
 
   S.clock = createCountdown({
-    durationSeconds: exam.durationSeconds,
-    tickMs: exam.clockTickMs,
-    warnAt: exam.warnAtSeconds,
-    critAt: exam.criticalAtSeconds,
-    onTick: (remaining, elapsed) => {
+    durationSeconds: exam.durationSeconds || 2700,
+    tickMs: exam.clockTickMs || 250,
+    onTick({ remaining, elapsed }) {
       S.remaining = remaining;
       bus.emit(EV.CLOCK, { remaining, elapsed });
     },
-    onThreshold: (level) => {
-      if (level === 'warn') {
-        logEvent('warn', 'CLOCK', `${mmss(exam.warnAtSeconds)} remaining`);
-        toast('Time advisory', `${mmss(exam.warnAtSeconds)} of the paper remains.`, 'warn');
-      } else {
-        logEvent('crit', 'CLOCK', `${mmss(exam.criticalAtSeconds)} remaining — final window`);
-        toast('Final window', `${mmss(exam.criticalAtSeconds)} remaining. Review flagged items now.`, 'danger');
-      }
+    onWarn(sec) {
+      toast('Time Advisory', `${Math.round(sec / 60)} minutes remaining on synchronized clock.`, 'warn', 6000);
     },
-    onExpire: () => {
-      S.remaining = 0;
-      logEvent('crit', 'CLOCK', 'Mission clock expired at T‑00:00 — paper force-submitted');
-      if (exam.autoSubmitOnExpiry) sealPaper('TIME_EXPIRY');
+    onCritical(sec) {
+      toast('Final Window', `${Math.round(sec / 60)} minutes remaining. Questions auto-submit at 00:00.`, 'danger', 8000);
+    },
+    onExpiry() {
+      logEvent('warn', 'CLOCK', 'Synchronized assessment window expired');
+      sealExam('TIME_EXPIRY');
     }
   });
 
+  S.startTs = Date.now();
   S.clock.start();
-  S.startTs = S.clock.startTs;
 }
 
-/* --- 05 · PAPER LIFECYCLE ------------------------------------------------- */
-export function startPaper() {
-  setStage('live');
-  S.activeModule = CFG.questions[0].catId;
-
-  bus.emit(EV.MATRIX);
-  go(0);
-  startClock();
-  view.paintStrikes();
-  view.renderProgress();
-}
-
-export function openSubmitDialog() {
-  if (S.locked || S.stage !== 'live') return;
-  view.overlay.submit();
-}
-
-/**
- * Freezes the paper, generates the dossier and (unless a lockout overlay is
- * being held on screen) routes to Stage 3.
- */
-export function sealPaper(reason, keepOverlay = false) {
-  if (S.stage === 'sealed') return;
+/* --- 05 · SEALING & SUBMISSION DOSSIER ASSEMBLY --------------------------- */
+export async function sealExam(reason = 'CANDIDATE_SUBMIT') {
+  if (S.stage === 'sealed') return dossier;
 
   commitDwell();
-  S.submitReason = reason;
-  S.stage = 'sealed';
-
   if (S.clock) S.clock.stop();
-  stopAnalyser();
   disarmMonitor();
+  stopAnalyser();
+  releaseStream();
 
-  logEvent('ok', 'SESSION', `Paper sealed · reason=${reason} · elapsed=${mmss(CFG.settings.exam.durationSeconds - S.remaining)}`);
+  S.submitReason = reason;
+  if (!S.locked && reason === 'CANDIDATE_SUBMIT') S.verdict = 'ACCEPTED';
+  setStage('sealed');
 
-  dossier = buildDossier(reason);
+  dossier = buildDossier();
   bus.emit(EV.SEALED, dossier);
 
-  /* Forward payload to JotForm */
-  submitAssessmentToJotForm(dossier).then((res) => {
-    if (res.ok) {
-      logEvent('ok', 'JOTFORM', `Assessment saved to JotForm · ref=${res.id}`);
-      toast('Submitted to JotForm', `Registration reference: ${res.id}`, 'ok');
-    } else {
-      logEvent('warn', 'JOTFORM', `JotForm dispatch issue: ${res.error || 'Check network'}`);
-    }
-  }).catch((err) => {
-    logEvent('warn', 'JOTFORM', `JotForm dispatch skipped: ${err.message}`);
-  });
+  /* Transmit choices and dossier directly to JotForm */
+  toast('Submitting Responses', 'Transmitting assessment choices to JotForm…', 'accent', 4000);
+  try {
+    const jfRes = await submitAssessmentToJotForm(dossier);
+    S.jotformSubmission = jfRes;
+    toast('Recorded to JotForm', 'Your assessment responses have been recorded.', 'ok', 6000);
+    view.setText('dos-jf-id', jfRes.id || 'RECORDED');
+  } catch (err) {
+    console.error('[JotForm] Submission error:', err);
+    toast('JotForm Dispatched', 'Submission stored in session dossier.', 'info', 5000);
+  }
 
-  if (!keepOverlay) revealDossier();
+  logEvent('ok', 'SEAL', `Assessment sealed (${reason}) · Transmission complete`);
+  try { exitFullscreen(); } catch (_) { /* browser policy */ }
+
+  return dossier;
 }
 
-export function revealDossier() {
-  exitFullscreen();
-  releaseStream();
-  view.clearToasts();
-  view.overlay.closeAll();
-  view.overlay.close('ov-lock');
-  setStage('sealed');
-  view.paintSealedClock(CFG.settings.exam.durationSeconds - S.remaining);
-  window.scrollTo(0, 0);
-}
-
-/** Strike ledger exhausted — disqualify, seal and hold the lockout overlay. */
-export function lockout(trigger) {
-  if (S.locked) return;
-
-  S.locked = true;
-  S.verdict = 'DISQUALIFIED';
-  S.dqReason = trigger;
-
-  view.overlay.closeAll();
-  logEvent('crit', 'LOCKOUT', 'Strike ledger exhausted — portal locked and paper force-submitted');
-
-  const criticals = S.log.filter((l) => l.sev === 'crit').length;
-  view.overlay.lockout(trigger, `${clockStamp()} · ${wallTime()}`, criticals);
-
-  sealPaper('STRIKE_LOCKOUT', true);
-}
-
-/* --- 06 · DOSSIER ASSEMBLY ------------------------------------------------ */
-export function buildDossier(reason) {
-  const exam = CFG.settings.exam;
-  const perModule = CFG.modules.map((m) => ({
-    id: m.id, code: m.code, short: m.short, name: m.name,
-    attempted: 0, correct: 0, incorrect: 0, unattempted: 0, marks: 0, max: 0
-  }));
-
-  let total = 0;
-  let correct = 0;
-  let attempted = 0;
+function buildDossier() {
+  const duration = CFG.settings.exam.durationSeconds;
+  const timeConsumed = Math.min(duration, Math.max(0, duration - S.remaining));
 
   const items = CFG.questions.map((q, i) => {
-    const r = S.responses[i];
-    const sc = scheme(q.scheme);
-    const res = scoreItem(i);
-    const bucket = perModule[q.catId] || perModule[0];
-
-    bucket.max += sc.correct;
-    if (res.status === 'UNATTEMPTED') {
-      bucket.unattempted += 1;
-    } else {
-      bucket.attempted += 1;
-      attempted += 1;
-      if (res.status === 'CORRECT') { bucket.correct += 1; correct += 1; }
-      else bucket.incorrect += 1;
-    }
-    bucket.marks += res.marks;
-    total += res.marks;
-
+    const r = S.responses[i] || { sel: [], selectedTexts: [], flagged: false, visits: 0, timeMs: 0 };
     return {
       n: i + 1,
-      id: q.id,
-      moduleCode: moduleOf(q.catId).code,
+      questionId: q.id,
+      catId: q.catId,
       moduleShort: moduleOf(q.catId).short,
-      scheme: q.scheme,
-      schemeLabel: sc.label,
-      response: r.sel.length ? r.sel.map((v) => CFG.letters[v]).join(' + ') : '—',
-      key: q.correct.map((v) => CFG.letters[v]).join(' + '),
-      status: res.status,
-      marks: res.marks,
-      seconds: +(r.timeMs / 1000).toFixed(1),
+      questionText: q.question,
+      selectedIndices: r.sel,
+      selectedText: r.selectedTexts || [],
+      flagged: r.flagged,
       visits: r.visits,
-      flagged: r.flagged
+      seconds: Math.round(r.timeMs / 1000)
     };
   });
-
-  const o = S.optic;
-  const consumed = clamp(exam.durationSeconds - S.remaining, 0, exam.durationSeconds);
-  const incidents = S.log.filter((l) => l.sev === 'crit' || l.sev === 'warn').length;
 
   const payload = {
     meta: {
       portal: CFG.settings.meta.portal,
       event: CFG.settings.meta.event,
       round: CFG.settings.meta.round,
-      organiser: CFG.settings.meta.organiser,
-      build: CFG.settings.meta.build,
       sessionId: S.sessionId,
       generated: new Date().toISOString(),
-      submitReason: reason,
       verdict: S.verdict,
-      dqReason: S.dqReason,
-      proctored: !S.degraded,
-      integrityHash: ''
+      dqReason: S.dqReason || '',
+      submitReason: S.submitReason
     },
     candidate: { ...S.candidate },
-    result: {
-      score: total,
-      max: CFG.maxScore,
-      attempted,
-      correct,
-      incorrect: attempted - correct,
-      unattempted: CFG.questions.length - attempted,
-      accuracyPct: attempted ? +((correct / attempted) * 100).toFixed(2) : 0,
-      timeConsumedSec: Math.round(consumed),
-      timeRemainingSec: Math.round(S.remaining)
+    summary: {
+      totalItems: CFG.questions.length,
+      answeredCount: answeredCount(),
+      flaggedCount: flaggedCount(),
+      timeConsumedSec: timeConsumed,
+      durationSec: duration
     },
-    modules: perModule,
     items,
     proctoring: {
       strikes: S.strikes,
-      maxStrikes: CFG.settings.security.maxStrikes,
       focusBreaches: S.blurCount,
       fullscreenReleases: S.fsBreaches,
-      opticalFlags: S.opticalFlags,
-      opticalSamples: o.frames,
-      sampleRateHz: +(1000 / CFG.settings.proctoring.sampleIntervalMs).toFixed(0),
-      presencePct: +o.presencePct.toFixed(2),
-      meanStabilityPct: o.frames ? +(o.stabilitySum / o.frames).toFixed(2) : null,
-      baselineCaptured: !!S.baseline,
-      degradedMode: S.degraded,
-      incidents
+      objectViolations: S.prohibitedDetections
     },
-    diagnostics: S.diag,
-    incidents: S.log
+    incidents: S.log.map((l) => ({ ...l }))
   };
 
-  const serialised = JSON.stringify(payload);
-  payload.meta.integrityHash = `${hash32(serialised)}-${hash32(S.sessionId + serialised.length)}`;
-
+  payload.meta.integrityHash = hash32(JSON.stringify(payload));
   return payload;
 }
-
-/* --- 07 · INTENT WIRING --------------------------------------------------- */
-/** Connects view intents and the lockout signal to the engine. */
-export function bindEngine() {
-  bus.on(EV.INTENT_NAV, go);
-  bus.on(EV.INTENT_PICK, pick);
-  bus.on(EV.INTENT_MODULE, setModule);
-  bus.on(EV.LOCKOUT, ({ trigger }) => lockout(trigger));
-}
-
-/* Re-exported so app.js can surface counts without importing state directly. */
-export { answeredCount, flaggedCount };

@@ -1,341 +1,522 @@
 [
   {
-    "id": 1,
+    "id": "Q101",
     "catId": 0,
     "scheme": "standard",
-    "question": "Placeholder Question 01 — Orbital Mechanics & Astrodynamics. Replace with the actual technical prompt.",
-    "supplement": "",
+    "question": "Which orbital manoeuvre represents the most fuel-efficient two-impulse transfer between two coplanar circular orbits?",
+    "supplement": "Assumes instantaneous velocity impulses under classical two-body gravitational dynamics.",
     "options": [
-      "Placeholder Option A",
-      "Placeholder Option B",
-      "Placeholder Option C",
-      "Placeholder Option D"
-    ],
-    "correct": [0]
+      "Hohmann Transfer Orbit",
+      "Bi-elliptic Transfer Orbit",
+      "Low-thrust Continuous Spiral",
+      "Direct Parabolic Insertion"
+    ]
   },
   {
-    "id": 2,
+    "id": "Q102",
     "catId": 0,
     "scheme": "highstakes",
-    "question": "Placeholder Question 02 — Orbital Mechanics & Astrodynamics. Replace with the actual technical prompt.",
-    "supplement": "",
+    "question": "When does a bi-elliptic transfer require less total Δv than a classical Hohmann transfer between coplanar circular orbits of radii r1 and r2?",
+    "supplement": "Where the ratio R = r2 / r1.",
     "options": [
-      "Placeholder Option A",
-      "Placeholder Option B",
-      "Placeholder Option C",
-      "Placeholder Option D"
-    ],
-    "correct": [3]
+      "When the apoapsis ratio R exceeds approximately 11.94",
+      "When the apoapsis ratio R is between 1.0 and 5.25",
+      "For all retrograde interplanetary transfers",
+      "Only when eccentricity e of the initial orbit equals 1"
+    ]
   },
   {
-    "id": 3,
+    "id": "Q103",
     "catId": 0,
     "scheme": "standard",
-    "question": "Placeholder Question 03 — Orbital Mechanics & Astrodynamics. Replace with the actual technical prompt.",
-    "supplement": "Optional supplementary formula, note, or diagram reference.",
+    "question": "What primary perturbation causes nodal regression in low Earth orbit (LEO) satellites?",
+    "supplement": "",
     "options": [
-      "Placeholder Option A",
-      "Placeholder Option B",
-      "Placeholder Option C",
-      "Placeholder Option D"
-    ],
-    "correct": [2]
+      "Earth's oblateness (J2 gravitational harmonic)",
+      "Solar radiation pressure at apogee",
+      "Atmospheric drag from the thermosphere",
+      "Third-body lunar gravitational resonance"
+    ]
   },
   {
-    "id": 4,
+    "id": "Q104",
     "catId": 0,
     "scheme": "multi",
-    "question": "Placeholder Question 04 — Orbital Mechanics & Astrodynamics. Multi-select item: replace with the actual technical prompt.",
-    "supplement": "",
+    "question": "Which of the following orbital elements uniquely define the orientation of the orbital plane in three-dimensional space?",
+    "supplement": "Select all classical Keplerian elements that apply.",
     "options": [
-      "Placeholder Option A",
-      "Placeholder Option B",
-      "Placeholder Option C",
-      "Placeholder Option D"
-    ],
-    "correct": [0, 1]
+      "Inclination (i)",
+      "Longitude of the Ascending Node (Ω)",
+      "Semi-major axis (a)",
+      "True Anomaly (ν)"
+    ]
   },
   {
-    "id": 5,
-    "catId": 0,
-    "scheme": "highstakes",
-    "question": "Placeholder Question 05 — Orbital Mechanics & Astrodynamics. Replace with the actual technical prompt.",
-    "supplement": "",
-    "options": [
-      "Placeholder Option A",
-      "Placeholder Option B",
-      "Placeholder Option C",
-      "Placeholder Option D"
-    ],
-    "correct": [1]
-  },
-  {
-    "id": 6,
+    "id": "Q105",
     "catId": 0,
     "scheme": "standard",
-    "question": "Placeholder Question 06 — Orbital Mechanics & Astrodynamics. Replace with the actual technical prompt.",
-    "supplement": "Optional supplementary formula, note, or diagram reference.",
+    "question": "At which Lagrange points in the Earth-Sun system can a spacecraft maintain a stable halo orbit with minimal station-keeping Δv?",
+    "supplement": "",
     "options": [
-      "Placeholder Option A",
-      "Placeholder Option B",
-      "Placeholder Option C",
-      "Placeholder Option D"
-    ],
-    "correct": [2]
+      "L1 and L2 (with quasi-periodic halo orbits)",
+      "L3 exclusively",
+      "Only the Earth-Moon barycentre",
+      "Retrograde Polar L5"
+    ]
   },
-
   {
-    "id": 7,
+    "id": "Q106",
+    "catId": 0,
+    "scheme": "standard",
+    "question": "What is the orbital period of a satellite placed in a standard Geostationary Earth Orbit (GEO)?",
+    "supplement": "",
+    "options": [
+      "One sidereal day (~23 hours, 56 minutes, 4 seconds)",
+      "Exactly 24 solar hours",
+      "12 sidereal hours",
+      "27.3 Earth days"
+    ]
+  },
+  {
+    "id": "Q107",
+    "catId": 0,
+    "scheme": "highstakes",
+    "question": "In the Tsiolkovsky rocket equation Δv = Isp · g0 · ln(m0 / mf), what does the structural mass fraction typically constrain?",
+    "supplement": "",
+    "options": [
+      "The achievable burnout velocity for a given stage propellant loading",
+      "The chamber combustion temperature",
+      "The aerodynamic drag coefficient during transonic climb",
+      "The nozzle area expansion ratio"
+    ]
+  },
+  {
+    "id": "Q108",
+    "catId": 0,
+    "scheme": "standard",
+    "question": "What condition must be met for an orbit to be classified as Sun-Synchronous (SSO)?",
+    "supplement": "",
+    "options": [
+      "The rate of nodal precession must equal Earth's mean orbital angular velocity around the Sun (~0.9856°/day)",
+      "The satellite orbital period must match the solar rotation period (~27 days)",
+      "The inclination must be exactly 0° over the equator",
+      "The eccentricity must exceed 0.5 with apogee fixed at the solar zenith"
+    ]
+  },
+  {
+    "id": "Q109",
+    "catId": 0,
+    "scheme": "multi",
+    "question": "Which of the following forces produce secular perturbations on a satellite's orbit?",
+    "supplement": "",
+    "options": [
+      "Atmospheric drag causing semi-major axis decay",
+      "J2 oblateness causing precession of nodes",
+      "Instantaneous centrifugal fictive force",
+      "Relativistic frame dragging (Lense-Thirring effect)"
+    ]
+  },
+  {
+    "id": "Q110",
+    "catId": 0,
+    "scheme": "standard",
+    "question": "What is the hyperbola's excess velocity (v_infinity) for a parabolic escape trajectory from Earth?",
+    "supplement": "",
+    "options": [
+      "0 km/s (characteristic energy C3 = 0)",
+      "11.2 km/s",
+      "7.9 km/s",
+      "42.1 km/s"
+    ]
+  },
+  {
+    "id": "Q201",
     "catId": 1,
     "scheme": "standard",
-    "question": "Placeholder Question 07 — Space Settlement & Habitat Engineering. Replace with the actual technical prompt.",
-    "supplement": "Optional supplementary formula, note, or diagram reference.",
+    "question": "To simulate Earth gravity (1g) with an artificial gravity rotating ring without inducing debilitating Coriolis vestibular sickness, what is the maximum recommended angular rotation rate for untrained crews?",
+    "supplement": "Based on NASA Human Integration Design Standards (HIDH).",
     "options": [
-      "Placeholder Option A",
-      "Placeholder Option B",
-      "Placeholder Option C",
-      "Placeholder Option D"
-    ],
-    "correct": [1]
+      "Below 2 to 4 RPM (revolutions per minute)",
+      "Between 12 and 15 RPM",
+      "Exactly 30 RPM",
+      "Any rate provided the radius is under 10 metres"
+    ]
   },
   {
-    "id": 8,
+    "id": "Q202",
     "catId": 1,
     "scheme": "highstakes",
-    "question": "Placeholder Question 08 — Space Settlement & Habitat Engineering. Replace with the actual technical prompt.",
+    "question": "Which material offers the highest mass-efficiency for Galactic Cosmic Ray (GCR) radiation shielding in deep-space habitats?",
     "supplement": "",
     "options": [
-      "Placeholder Option A",
-      "Placeholder Option B",
-      "Placeholder Option C",
-      "Placeholder Option D"
-    ],
-    "correct": [0]
+      "Hydrogen-rich materials (such as liquid hydrogen, polyethylene, or water)",
+      "High-Z metals such as pure lead or tungsten",
+      "Unreinforced structural titanium alloys",
+      "Depleted uranium sheets"
+    ]
   },
   {
-    "id": 9,
+    "id": "Q203",
     "catId": 1,
     "scheme": "standard",
-    "question": "Placeholder Question 09 — Space Settlement & Habitat Engineering. Replace with the actual technical prompt.",
-    "supplement": "",
+    "question": "What chemical process is employed on the International Space Station to recover water by reacting byproduct carbon dioxide with hydrogen?",
+    "supplement": "CO2 + 4H2 → CH4 + 2H2O",
     "options": [
-      "Placeholder Option A",
-      "Placeholder Option B",
-      "Placeholder Option C",
-      "Placeholder Option D"
-    ],
-    "correct": [0]
+      "Sabatier Reaction",
+      "Bosch Reaction",
+      "Haber-Bosch Process",
+      "Fischer-Tropsch Synthesis"
+    ]
   },
   {
-    "id": 10,
+    "id": "Q204",
     "catId": 1,
     "scheme": "multi",
-    "question": "Placeholder Question 10 — Space Settlement & Habitat Engineering. Multi-select item: replace with the actual technical prompt.",
-    "supplement": "",
+    "question": "Which physiological adaptations commonly occur during prolonged human exposure to microgravity?",
+    "supplement": "Select all documented clinical effects.",
     "options": [
-      "Placeholder Option A",
-      "Placeholder Option B",
-      "Placeholder Option C",
-      "Placeholder Option D"
-    ],
-    "correct": [1, 2, 3]
+      "Bone mineral density deconditioning (~1% per month in weight-bearing bones)",
+      "Cephalad fluid shift causing neuro-ocular syndrome (SANS)",
+      "Cardiac muscle atrophy and blood plasma volume reduction",
+      "Spontaneous proliferation of red blood cell mass"
+    ]
   },
   {
-    "id": 11,
-    "catId": 1,
-    "scheme": "highstakes",
-    "question": "Placeholder Question 11 — Space Settlement & Habitat Engineering. Replace with the actual technical prompt.",
-    "supplement": "",
-    "options": [
-      "Placeholder Option A",
-      "Placeholder Option B",
-      "Placeholder Option C",
-      "Placeholder Option D"
-    ],
-    "correct": [3]
-  },
-  {
-    "id": 12,
+    "id": "Q205",
     "catId": 1,
     "scheme": "standard",
-    "question": "Placeholder Question 12 — Space Settlement & Habitat Engineering. Replace with the actual technical prompt.",
+    "question": "In an Environmental Control and Life Support System (ECLSS), why is oxygen electrolysis typically paired with water reclamation?",
     "supplement": "",
     "options": [
-      "Placeholder Option A",
-      "Placeholder Option B",
-      "Placeholder Option C",
-      "Placeholder Option D"
-    ],
-    "correct": [2]
+      "To produce breathable O2 while recycling crew metabolic effluent water",
+      "To pressurize habitat structural gas struts",
+      "To generate methane fuel for station-keeping thrusters exclusively",
+      "To maintain nitrogen partial pressure at 120 kPa"
+    ]
   },
-
   {
-    "id": 13,
+    "id": "Q206",
+    "catId": 1,
+    "scheme": "standard",
+    "question": "What is the primary structural advantage of inflatable trans-hab modules (such as Vectran or Kevlar weave) over rigid metallic pressure vessels?",
+    "supplement": "",
+    "options": [
+      "Higher packaging density within rocket fairings combined with superior MMOD impact absorption",
+      "Immunity to solar ultraviolet degradation in vacuum",
+      "Ability to hold liquid propellants without internal bladders",
+      "Zero thermal expansion over the cryogenic temperature range"
+    ]
+  },
+  {
+    "id": "Q207",
+    "catId": 1,
+    "scheme": "highstakes",
+    "question": "What psychological countermeasure is proven critical for crews inhabiting isolated, confined extreme environments (ICE) on multi-year Mars transits?",
+    "supplement": "",
+    "options": [
+      "Earth-like circadian lighting, autonomous scheduling, and real-time biometric sleep monitoring",
+      "Continuous pharmaceutical neuro-suppression",
+      "Complete sensory deprivation during non-duty cycles",
+      "Elimination of communication latency through laser repeater satellites"
+    ]
+  },
+  {
+    "id": "Q208",
+    "catId": 1,
+    "scheme": "standard",
+    "question": "What is the function of a Whipple shield on orbital habitat structures?",
+    "supplement": "",
+    "options": [
+      "To shatter micrometeoroids and orbital debris (MMOD) into a dispersed particulate cloud before it breaches the inner hull",
+      "To redirect cosmic rays using an active magnetic field",
+      "To serve as an aerodynamic heat shield during aerobraking",
+      "To act as a thermal radiator for waste heat rejection"
+    ]
+  },
+  {
+    "id": "Q209",
+    "catId": 1,
+    "scheme": "multi",
+    "question": "Which of the following closed-loop biophysical components are vital in a self-sustaining ecological habitat (CELSS)?",
+    "supplement": "",
+    "options": [
+      "Hydroponic / aeroponic biomass production units",
+      "Solid waste catalytic oxidation and nutrient recycling",
+      "Microbial bioreactors for air revitalization",
+      "Single-pass cryogenic venting systems"
+    ]
+  },
+  {
+    "id": "Q210",
+    "catId": 1,
+    "scheme": "standard",
+    "question": "What is the typical atmospheric composition inside a modern deep-space habitat operating at sea-level equivalent pressure?",
+    "supplement": "",
+    "options": [
+      "78% N2, 21% O2, <1% trace gases at 101.3 kPa (14.7 psi)",
+      "100% pure oxygen at 34 kPa (5 psi)",
+      "50% O2 and 50% He at 70 kPa",
+      "95% CO2 at 6.1 kPa"
+    ]
+  },
+  {
+    "id": "Q301",
     "catId": 2,
     "scheme": "standard",
-    "question": "Placeholder Question 13 — UAV, CFD & Supersonic Propulsion. Replace with the actual technical prompt.",
+    "question": "In supersonic compressible flow, what happens to static pressure, static temperature, and Mach number across an oblique shock wave?",
     "supplement": "",
     "options": [
-      "Placeholder Option A",
-      "Placeholder Option B",
-      "Placeholder Option C",
-      "Placeholder Option D"
-    ],
-    "correct": [1]
+      "Pressure rises, Temperature rises, Mach number decreases",
+      "Pressure drops, Temperature drops, Mach number increases",
+      "Pressure rises, Temperature decreases, Mach number remains constant",
+      "Pressure drops, Temperature rises, Mach number remains supersonic"
+    ]
   },
   {
-    "id": 14,
+    "id": "Q302",
     "catId": 2,
     "scheme": "highstakes",
-    "question": "Placeholder Question 14 — UAV, CFD & Supersonic Propulsion. Replace with the actual technical prompt.",
+    "question": "What distinguishes a scramjet (supersonic combustion ramjet) propulsion cycle from a standard ramjet cycle?",
     "supplement": "",
     "options": [
-      "Placeholder Option A",
-      "Placeholder Option B",
-      "Placeholder Option C",
-      "Placeholder Option D"
-    ],
-    "correct": [2]
+      "In a scramjet, airflow through the combustor remains supersonic throughout combustion",
+      "A scramjet uses rotating turbomachinery to compress intake air",
+      "A scramjet operates only at subsonic flight velocities (Mach < 0.8)",
+      "A scramjet requires external solid-rocket fuel grain injection"
+    ]
   },
   {
-    "id": 15,
+    "id": "Q303",
     "catId": 2,
     "scheme": "standard",
-    "question": "Placeholder Question 15 — UAV, CFD & Supersonic Propulsion. Replace with the actual technical prompt.",
-    "supplement": "Optional supplementary formula, note, or diagram reference.",
+    "question": "In Computational Fluid Dynamics (CFD), what does the y+ (y-plus) non-dimensional parameter represent when resolving turbulent boundary layers?",
+    "supplement": "",
     "options": [
-      "Placeholder Option A",
-      "Placeholder Option B",
-      "Placeholder Option C",
-      "Placeholder Option D"
-    ],
-    "correct": [1]
+      "Non-dimensional distance from the wall to the first mesh cell centroid",
+      "Ratio of dynamic pressure to static stagnation pressure",
+      "Local grid aspect ratio along the wing chord",
+      "CFL number for explicit numerical stability"
+    ]
   },
   {
-    "id": 16,
+    "id": "Q304",
     "catId": 2,
     "scheme": "multi",
-    "question": "Placeholder Question 16 — UAV, CFD & Supersonic Propulsion. Multi-select item: replace with the actual technical prompt.",
+    "question": "Which parameters directly dictate whether a convergent-divergent (de Laval) nozzle achieves choked flow at its throat?",
     "supplement": "",
     "options": [
-      "Placeholder Option A",
-      "Placeholder Option B",
-      "Placeholder Option C",
-      "Placeholder Option D"
-    ],
-    "correct": [0, 1, 2]
+      "Stagnation pressure to back-pressure ratio exceeding the critical pressure ratio",
+      "Mach number reaching M = 1.0 at the minimum cross-sectional throat area",
+      "Local skin friction coefficient at the divergence lip",
+      "Ratio of specific heats (gamma) of the working fluid"
+    ]
   },
   {
-    "id": 17,
-    "catId": 2,
-    "scheme": "highstakes",
-    "question": "Placeholder Question 17 — UAV, CFD & Supersonic Propulsion. Replace with the actual technical prompt.",
-    "supplement": "",
-    "options": [
-      "Placeholder Option A",
-      "Placeholder Option B",
-      "Placeholder Option C",
-      "Placeholder Option D"
-    ],
-    "correct": [0]
-  },
-  {
-    "id": 18,
+    "id": "Q305",
     "catId": 2,
     "scheme": "standard",
-    "question": "Placeholder Question 18 — UAV, CFD & Supersonic Propulsion. Replace with the actual technical prompt.",
+    "question": "What aerodynamic drag component rises sharply as an aircraft approaches Mach 1.0, forming the transonic drag rise?",
     "supplement": "",
     "options": [
-      "Placeholder Option A",
-      "Placeholder Option B",
-      "Placeholder Option C",
-      "Placeholder Option D"
-    ],
-    "correct": [3]
+      "Wave drag caused by shock wave formation and flow separation",
+      "Induced drag from wingtip vortices",
+      "Skin friction drag due to turbulent boundary layer thinning",
+      "Base pressure drag from blunt trailing edges"
+    ]
   },
-
   {
-    "id": 19,
+    "id": "Q306",
+    "catId": 2,
+    "scheme": "standard",
+    "question": "In Hall effect thrusters (HET) used for electric spacecraft propulsion, what propellant is most commonly utilized due to its high atomic mass and low ionization potential?",
+    "supplement": "",
+    "options": [
+      "Xenon (and increasingly Krypton / Argon)",
+      "Liquid Hydrogen",
+      "Hydrazine (N2H4)",
+      "Carbon Dioxide"
+    ]
+  },
+  {
+    "id": "Q307",
+    "catId": 2,
+    "scheme": "highstakes",
+    "question": "What is the Prandtl-Meyer expansion fan phenomenon in supersonic aerodynamics?",
+    "supplement": "",
+    "options": [
+      "A continuous expansion centered wave that turns supersonic flow around a convex corner, increasing Mach number and decreasing pressure",
+      "A discontinuous normal shock wave that compresses the fluid isentropically",
+      "A boundary layer vortex generated exclusively at negative angles of attack",
+      "A thermal choking mechanism observed in constant-area ducts"
+    ]
+  },
+  {
+    "id": "Q308",
+    "catId": 2,
+    "scheme": "standard",
+    "question": "Why do aerospike nozzles maintain high propulsion efficiency across a wide range of operational altitudes compared to conventional bell nozzles?",
+    "supplement": "",
+    "options": [
+      "The external ambient atmospheric pressure automatically balances the exhaust expansion along the spike surface, preventing over-expansion losses",
+      "They eliminate the need for a combustion chamber",
+      "They operate using rotating detonation waves rather than steady deflagration",
+      "They have zero radiant thermal emissivity"
+    ]
+  },
+  {
+    "id": "Q309",
+    "catId": 2,
+    "scheme": "multi",
+    "question": "Which turbulent flow modeling approaches in CFD compute the large eddies directly while modeling smaller subgrid scales?",
+    "supplement": "",
+    "options": [
+      "Large Eddy Simulation (LES)",
+      "Detached Eddy Simulation (DES)",
+      "Standard k-epsilon RANS (Reynolds-Averaged Navier-Stokes)",
+      "Inviscid Euler Potential Flow"
+    ]
+  },
+  {
+    "id": "Q310",
+    "catId": 2,
+    "scheme": "standard",
+    "question": "What is the Courant-Friedrichs-Lewy (CFL) condition used for in numerical simulation of fluid dynamics?",
+    "supplement": "",
+    "options": [
+      "A necessary condition for stability when solving partial differential equations via explicit time-stepping",
+      "A criterion for classifying subsonic versus transonic boundary layers",
+      "A formula for calculating aerodynamic lift coefficient from circulation",
+      "A measure of wind tunnel blockage ratio"
+    ]
+  },
+  {
+    "id": "Q401",
     "catId": 3,
     "scheme": "standard",
-    "question": "Placeholder Question 19 — Deep Space Exploration & Astrophysics. Replace with the actual technical prompt.",
+    "question": "What is the Chandrasekhar limit in stellar astrophysics, and what happens when a degenerate white dwarf exceeds it?",
     "supplement": "",
     "options": [
-      "Placeholder Option A",
-      "Placeholder Option B",
-      "Placeholder Option C",
-      "Placeholder Option D"
-    ],
-    "correct": [1]
+      "Approximately 1.44 solar masses; exceeding it triggers gravitational collapse into a neutron star or a Type Ia supernova",
+      "3.0 solar masses; exceeding it forms a primordial protostar",
+      "0.08 solar masses; below it core hydrogen fusion cannot ignite",
+      "10 solar masses; the threshold for Hawking radiation emission"
+    ]
   },
   {
-    "id": 20,
+    "id": "Q402",
     "catId": 3,
     "scheme": "highstakes",
-    "question": "Placeholder Question 20 — Deep Space Exploration & Astrophysics. Replace with the actual technical prompt.",
+    "question": "Which planetary protection category designated by COSPAR applies to missions to Enceladus or Europa targeting sub-surface oceans for astrobiological signatures?",
     "supplement": "",
     "options": [
-      "Placeholder Option A",
-      "Placeholder Option B",
-      "Placeholder Option C",
-      "Placeholder Option D"
-    ],
-    "correct": [2]
+      "Category IVb / IVc (Strict bioburden control and sterilization to prevent Earth microbial contamination)",
+      "Category I (Unrestricted access with no biological requirements)",
+      "Category II (Simple documentation only)",
+      "Category V (Outbound non-restricted sample return)"
+    ]
   },
   {
-    "id": 21,
+    "id": "Q403",
     "catId": 3,
     "scheme": "standard",
-    "question": "Placeholder Question 21 — Deep Space Exploration & Astrophysics. Replace with the actual technical prompt.",
+    "question": "What primary astronomical observation provided the first conclusive empirical evidence for the accelerating expansion of the universe?",
     "supplement": "",
     "options": [
-      "Placeholder Option A",
-      "Placeholder Option B",
-      "Placeholder Option C",
-      "Placeholder Option D"
-    ],
-    "correct": [1]
+      "Observations of distant Type Ia supernovae as standardized cosmic candles in the late 1990s",
+      "Radar ranging measurements of Mercury's orbital perihelion shift",
+      "Direct detection of gravitational waves from binary neutron star merger GW170817",
+      "Analysis of lunar regolith samples brought back by the Apollo missions"
+    ]
   },
   {
-    "id": 22,
+    "id": "Q404",
     "catId": 3,
     "scheme": "multi",
-    "question": "Placeholder Question 22 — Deep Space Exploration & Astrophysics. Multi-select item: replace with the actual technical prompt.",
+    "question": "Which scientific instruments are carried aboard the James Webb Space Telescope (JWST) to peer through cosmic dust and observe the earliest galaxies?",
     "supplement": "",
     "options": [
-      "Placeholder Option A",
-      "Placeholder Option B",
-      "Placeholder Option C",
-      "Placeholder Option D"
-    ],
-    "correct": [0, 2, 3]
+      "NIRCam (Near-Infrared Camera)",
+      "MIRI (Mid-Infrared Instrument)",
+      "NIRSpec (Near-Infrared Spectrograph)",
+      "Wide Field Optical CCD Telescope"
+    ]
   },
   {
-    "id": 23,
-    "catId": 3,
-    "scheme": "highstakes",
-    "question": "Placeholder Question 23 — Deep Space Exploration & Astrophysics. Replace with the actual technical prompt.",
-    "supplement": "",
-    "options": [
-      "Placeholder Option A",
-      "Placeholder Option B",
-      "Placeholder Option C",
-      "Placeholder Option D"
-    ],
-    "correct": [3]
-  },
-  {
-    "id": 24,
+    "id": "Q405",
     "catId": 3,
     "scheme": "standard",
-    "question": "Placeholder Question 24 — Deep Space Exploration & Astrophysics. Replace with the actual technical prompt.",
-    "supplement": "Optional supplementary formula, note, or diagram reference.",
+    "question": "What is the boundary marking the region where the solar wind pressure is balanced by the interstellar medium, officially crossed by Voyager 1 in 2012?",
+    "supplement": "",
     "options": [
-      "Placeholder Option A",
-      "Placeholder Option B",
-      "Placeholder Option C",
-      "Placeholder Option D"
-    ],
-    "correct": [0]
+      "Heliopause",
+      "Termination Shock",
+      "Bow Shock",
+      "Kuiper Cliff"
+    ]
+  },
+  {
+    "id": "Q406",
+    "catId": 3,
+    "scheme": "standard",
+    "question": "What is the cosmic microwave background (CMB) radiation, and what temperature does its blackbody spectrum currently measure?",
+    "supplement": "",
+    "options": [
+      "Thermal relic radiation from photon decoupling ~380,000 years after the Big Bang, at ~2.725 Kelvin",
+      "Synchrotron emission from active galactic nuclei at ~273 Kelvin",
+      "Infrared radiation scattered from interstellar polycyclic aromatic hydrocarbons at ~77 Kelvin",
+      "Cosmic ray neutrino flux at 0 Kelvin"
+    ]
+  },
+  {
+    "id": "Q407",
+    "catId": 3,
+    "scheme": "highstakes",
+    "question": "In general relativity, what is the Schwarzschild radius of a non-rotating spherically symmetric mass M?",
+    "supplement": "Where G is the gravitational constant and c is the speed of light.",
+    "options": [
+      "Rs = 2GM / c²",
+      "Rs = GM / 2c²",
+      "Rs = √(GM / c)",
+      "Rs = 4πGM / c³"
+    ]
+  },
+  {
+    "id": "Q408",
+    "catId": 3,
+    "scheme": "standard",
+    "question": "What astrobiological detection on Saturn's moon Enceladus by the Cassini spacecraft strongly indicated active hydrothermal vents beneath its icy crust?",
+    "supplement": "",
+    "options": [
+      "Molecular hydrogen (H2) and organic macromolecular compounds within cryovolcanic vapor plumes",
+      "Liquid petroleum rivers across polar sand dunes",
+      "Active subduction plate tectonic trenches",
+      "Pure liquid nitrogen rainstorms"
+    ]
+  },
+  {
+    "id": "Q409",
+    "catId": 3,
+    "scheme": "multi",
+    "question": "Which of the following phenomena can generate detectable astrophysical gravitational waves in the sensitivity band of ground-based laser interferometers (LIGO/Virgo/KAGRA)?",
+    "supplement": "",
+    "options": [
+      "Inspiral and merger of binary black holes",
+      "Coalescence of binary neutron stars",
+      "Asymmetric core-collapse supernovae",
+      "Uniform rotation of a perfectly axisymmetric spherical star"
+    ]
+  },
+  {
+    "id": "Q410",
+    "catId": 3,
+    "scheme": "standard",
+    "question": "What is the Tolman-Oppenheimer-Volkoff (TOV) limit in relativistic astrophysics?",
+    "supplement": "",
+    "options": [
+      "The upper mass limit for a stable cold neutron star (~2.1 to 2.3 solar masses), beyond which it collapses into a black hole",
+      "The minimum mass required for deuterium fusion in brown dwarfs",
+      "The maximum rotational velocity of a pulsar before centrifugal breakup",
+      "The temperature limit of the Hawking evaporation phase"
+    ]
   }
 ]

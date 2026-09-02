@@ -1,246 +1,356 @@
 /* ==========================================================================
    QUIZZITCH — layout.css
-   Corporate shell, top navigation, step forms, and assessment workspace.
    Matching CelesteCon #26 official design architecture (celestecon.aeross.org).
+   Warm bone/ivory cards, deep obsidian viewport, HUD, lounge, workspace, dossier.
    ========================================================================== */
 
-/* --- 01 · TOP HUD (NAVIGATION) -------------------------------------------- */
+/* --- 01 · SCREEN CONTAINERS & WRAPPERS ------------------------------------ */
+.screen {
+  width: 100%;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+.wrap {
+  width: 100%;
+  max-width: 1300px;
+  margin: 0 auto;
+  padding: 24px 20px 60px;
+  position: relative;
+  z-index: 1;
+}
+
+.stack {
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+}
+
+/* Grids */
+.grid {
+  display: grid;
+  gap: 22px;
+}
+.grid--2 {
+  grid-template-columns: repeat(2, 1fr);
+}
+@media (max-width: 900px) {
+  .grid--2 {
+    grid-template-columns: 1fr;
+  }
+}
+.grid--tight {
+  gap: 14px;
+}
+.grid--stretch {
+  align-items: stretch;
+}
+
+/* --- 02 · PERSISTENT HUD -------------------------------------------------- */
 .hud {
   position: sticky;
   top: 0;
-  z-index: 700;
+  z-index: 100;
   height: var(--hud-h);
-  display: grid;
-  grid-template-columns: minmax(220px, 1fr) auto minmax(220px, 1fr);
-  align-items: center;
-  gap: 16px;
-  padding: 0 28px;
   background: rgba(16, 14, 12, 0.94);
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
-  border-bottom: 1px solid rgba(232, 225, 206, 0.12);
+  border-bottom: 1px solid var(--border-strong);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 24px;
+  gap: 16px;
 }
 
 .hud__brand {
   display: flex;
   align-items: center;
   gap: 12px;
-  min-width: 0;
 }
 
 .hud__mark {
   width: 28px;
   height: 28px;
-  flex: 0 0 28px;
-  border: 1px solid rgba(232, 225, 206, 0.3);
   border-radius: var(--radius-xs);
-  background: var(--bone);
+  background: var(--crimson);
   display: flex;
   align-items: center;
   justify-content: center;
+  position: relative;
 }
-.hud__mark::before {
-  content: '';
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: var(--crimson);
+.hud__mark::after {
+  content: "Q";
+  font-family: var(--font-display);
+  font-size: 16px;
+  font-weight: 400;
+  color: #fff;
 }
 
 .hud__id {
   display: flex;
   flex-direction: column;
-  min-width: 0;
+  line-height: 1.15;
 }
 .hud__id strong {
   font-family: var(--font-display);
-  font-size: 19px;
-  font-weight: 400;
-  letter-spacing: .06em;
-  line-height: 1;
+  font-size: 17px;
+  letter-spacing: .08em;
   color: var(--bone-hi);
-  text-transform: uppercase;
+  font-weight: 400;
 }
 .hud__id small {
   font-family: var(--font-mono);
   font-size: 10px;
   letter-spacing: .04em;
   color: var(--bone-dim);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  text-transform: uppercase;
 }
 
-/* Center Clock */
 .hud__clock {
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 6px 18px;
-  background: rgba(232, 225, 206, 0.08);
-  border: 1px solid rgba(232, 225, 206, 0.18);
+  background: var(--surface-input);
+  border: 1px solid var(--border-sub);
+  padding: 6px 14px;
   border-radius: var(--radius-xs);
 }
 .hud__clock-cap {
   font-family: var(--font-mono);
   font-size: 10px;
   font-weight: 600;
-  letter-spacing: .12em;
+  color: var(--ink-3);
   text-transform: uppercase;
-  color: var(--bone-dim);
+  letter-spacing: .08em;
 }
 .hud__clock-val {
   font-family: var(--font-mono);
-  font-size: 18px;
+  font-size: 15px;
   font-weight: 700;
-  line-height: 1;
-  letter-spacing: .04em;
-  color: var(--bone-hi);
+  color: var(--crimson);
 }
-.hud__clock.is-warn .hud__clock-val { color: #f59e0b; }
-.hud__clock.is-crit .hud__clock-val { color: var(--crimson); }
+.hud__clock-val.is-warn { color: var(--warning); }
+.hud__clock-val.is-bad  { color: var(--danger); }
 
 .hud__meta {
   display: flex;
   align-items: center;
-  justify-content: flex-end;
   gap: 10px;
-  flex-wrap: wrap;
 }
 
-/* --- 02 · STAGE SHELLS & CORPORATE CARD WRAP ----------------------------- */
-.screen {
-  display: block;
-  position: relative;
-  z-index: 2;
-  padding: 20px 14px 60px;
-}
-
-/* The iconic CelesteCon Paper Container */
-.wrap {
-  position: relative;
-  width: min(1120px, 100%);
-  margin: 12px auto 40px;
-  padding: clamp(24px, 4vw, 48px) clamp(20px, 3.8vw, 44px) 60px;
-  background: radial-gradient(120% 70% at 50% 0%, var(--bone-hi) 0%, var(--bone) 60%, var(--bone-dim) 100%);
-  border-radius: var(--radius);
-  box-shadow: var(--shadow-paper);
-  border: 1px solid var(--border-sub);
-}
-
-.stack {
-  display: flex;
-  flex-direction: column;
-  gap: 20px;
-}
-
-.grid {
-  display: grid;
-  gap: 18px;
-  align-items: start;
-}
-.grid--2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-.grid--3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
-.grid--tight { gap: 14px; }
-.grid--stretch { align-items: stretch; }
-
-@media (max-width: 900px) {
-  .grid--2, .grid--3 {
-    grid-template-columns: 1fr;
-  }
-}
-
-/* --- 03 · STEP 0 HERO (ONBOARDING) ---------------------------------------- */
-.hero {
-  padding-bottom: 24px;
-  border-bottom: 1px solid var(--border-sub);
-}
-
-.eyebrow {
-  margin: 0 0 8px;
-  color: var(--ink-3);
-  font-family: var(--font-mono);
-  font-size: 12px;
-  font-weight: 500;
-  letter-spacing: .06em;
-  text-transform: uppercase;
-}
-
-.hero__tags {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  margin-bottom: 14px;
-}
-
-.hero__title {
-  font-family: var(--font-display);
-  font-size: clamp(38px, 6vw, 64px);
-  font-weight: 400;
-  line-height: 0.95;
-  letter-spacing: -0.01em;
-  text-transform: uppercase;
-  color: var(--ink);
-}
-.hero__title span {
-  color: var(--crimson);
-}
-
-.hero__sub {
-  max-width: 76ch;
-  margin-top: 14px;
-  font-size: 15px;
-  line-height: 1.65;
-  color: var(--ink-2);
-}
-
-.hero__strip {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  margin-top: 18px;
-}
-
-/* --- 04 · FINAL STEP LAUNCH BAR ------------------------------------------- */
-.launchbar {
+.strikes {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 20px;
-  padding: 20px 24px;
-  background: var(--surface-3);
+  gap: 4px;
+  padding: 3px 6px;
+  background: var(--surface-input);
   border: 1px solid var(--border-sub);
-  border-radius: var(--radius-sm);
-  flex-wrap: wrap;
-  margin-top: 10px;
+  border-radius: var(--radius-xs);
+}
+.strikes__pip {
+  width: 16px;
+  height: 16px;
+  border-radius: 2px;
+  background: var(--surface-3);
+  color: var(--ink-4);
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  font-weight: 700;
+  display: grid;
+  place-items: center;
+}
+.strikes__pip.is-armed,
+.strikes__pip.is-hit {
+  background: var(--crimson);
+  color: #fff;
 }
 
-.launchbar__cap {
+/* --- 03 · HERO BANNER (ONBOARDING) ---------------------------------------- */
+.hero {
+  text-align: center;
+  max-width: 820px;
+  margin: 10px auto 14px;
+}
+.eyebrow {
   font-family: var(--font-mono);
   font-size: 11px;
   font-weight: 600;
   letter-spacing: .12em;
   text-transform: uppercase;
-  color: var(--ink-3);
+  color: var(--bone-dim);
   margin-bottom: 8px;
 }
-
-.gatelist {
+.hero__tags {
   display: flex;
-  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
   gap: 8px;
+  margin-bottom: 12px;
+  flex-wrap: wrap;
+}
+.hero__title {
+  font-family: var(--font-display);
+  font-size: clamp(34px, 5vw, 56px);
+  font-weight: 400;
+  text-transform: uppercase;
+  color: var(--bone-hi);
+  line-height: 0.98;
+  letter-spacing: -0.01em;
+  margin-bottom: 12px;
+}
+.hero__title span {
+  color: var(--crimson);
+}
+.hero__sub {
+  font-size: 14.5px;
+  color: var(--bone-dim);
+  line-height: 1.6;
+  max-width: 680px;
+  margin: 0 auto;
+}
+.hero__strip {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 14px;
+  flex-wrap: wrap;
 }
 
+/* Launchbar bottom action */
+.launchbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 20px 24px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-paper);
+  flex-wrap: wrap;
+}
+.launchbar__cap {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+  margin-bottom: 6px;
+}
 .launchbar__note {
-  margin-top: 6px;
   font-family: var(--font-mono);
   font-size: 11.5px;
   color: var(--crimson);
+  margin-top: 6px;
+}
+.gatelist {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+/* --- 04 · WAITING ROOM LOUNGE (WAYGROUND / QUIZZLY STYLE) ------------------ */
+.lounge {
+  max-width: 820px;
+  margin: 32px auto;
+  width: 100%;
+}
+.lounge-card {
+  background: radial-gradient(120% 80% at 50% 0%, var(--bone-hi) 0%, var(--bone) 70%, var(--bone-dim) 100%);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 40px 36px;
+  box-shadow: var(--shadow-paper);
+  text-align: center;
+  position: relative;
+  overflow: hidden;
+}
+.lounge-card::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 4px;
+  background: var(--crimson);
+}
+
+.lounge__countdown {
+  margin: 28px 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+.lounge__timer-label {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: .12em;
+  color: var(--ink-3);
+  margin-bottom: 6px;
+}
+.lounge__timer-clock {
+  font-family: var(--font-mono);
+  font-size: clamp(48px, 8vw, 68px);
+  font-weight: 700;
+  color: var(--crimson);
+  letter-spacing: -0.02em;
+  line-height: 1;
+}
+
+.lounge__grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 12px;
+  margin: 28px 0 20px;
+  text-align: left;
+}
+.lounge__cell {
+  background: var(--surface-input);
+  border: 1px solid var(--border-sub);
+  border-radius: var(--radius-xs);
+  padding: 14px;
+}
+.lounge__cell-k {
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  font-weight: 600;
+  color: var(--ink-3);
+  text-transform: uppercase;
+  letter-spacing: .08em;
+  margin-bottom: 4px;
+  display: block;
+}
+.lounge__cell-v {
+  font-family: var(--font-mono);
+  font-size: 13.5px;
+  font-weight: 700;
+  color: var(--ink);
+  display: block;
+}
+
+.lounge__pulse {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 14px;
+  border-radius: var(--radius-pill);
+  background: var(--surface-3);
+  border: 1px solid var(--border-sub);
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  color: var(--ink-2);
 }
 
 /* --- 05 · LIVE ASSESSMENT WORKSPACE --------------------------------------- */
 .workspace {
-  max-width: 1400px;
+  max-width: 1440px;
   margin: 0 auto;
   padding: 16px 20px 48px;
   display: grid;
@@ -275,14 +385,15 @@
   }
 }
 
-/* Question Matrix inside Rail */
+/* Question Matrix in Rail */
 .matrix-tabs {
   display: flex;
   overflow-x: auto;
   border-bottom: 1px solid var(--border-sub);
   background: var(--surface-3);
 }
-.matrix-tabs button {
+.matrix-tabs button,
+.matrix-tab {
   padding: 8px 12px;
   font-family: var(--font-mono);
   font-size: 11px;
@@ -290,19 +401,19 @@
   letter-spacing: .06em;
   text-transform: uppercase;
   color: var(--ink-3);
+  border: none;
+  background: transparent;
   border-bottom: 2px solid transparent;
   white-space: nowrap;
+  cursor: pointer;
   transition: all var(--t-fast);
 }
-.matrix-tabs button span {
-  margin-right: 4px;
-  opacity: .8;
-}
+.matrix-tab:hover,
 .matrix-tabs button:hover {
   color: var(--ink);
   background: rgba(22, 19, 16, .05);
 }
-.matrix-tabs button.is-active,
+.matrix-tab.is-active,
 .matrix-tabs button.is-on {
   color: var(--ink);
   border-bottom-color: var(--crimson);
@@ -318,8 +429,7 @@
   background: var(--surface);
 }
 
-.mat-item,
-.matrix__cell {
+.matrix-cell {
   aspect-ratio: 1;
   display: grid;
   place-items: center;
@@ -333,38 +443,32 @@
   transition: all var(--t-fast);
   cursor: pointer;
 }
-.mat-item:hover,
-.matrix__cell:hover {
+.matrix-cell:hover {
   border-color: var(--ink);
   transform: scale(1.04);
 }
-.mat-item.is-current,
-.matrix__cell.is-current {
+.matrix-cell.is-current {
   border-color: var(--ink);
   background: var(--ink);
   color: var(--bone-hi);
   font-weight: 700;
 }
-.mat-item.is-answered,
-.matrix__cell.is-answered {
+.matrix-cell.is-answered {
   background: var(--surface-3);
   border-color: var(--success);
   color: var(--success);
 }
-.mat-item.is-answered.is-current,
-.matrix__cell.is-answered.is-current {
+.matrix-cell.is-answered.is-current {
   background: var(--success);
   color: #fff;
   border-color: var(--success);
 }
-.mat-item.is-flagged,
-.matrix__cell.is-flagged {
+.matrix-cell.is-flagged {
   border-color: var(--warning);
   color: var(--warning);
   position: relative;
 }
-.mat-item.is-flagged::after,
-.matrix__cell.is-flagged::after {
+.matrix-cell.is-flagged::after {
   content: '⚑';
   position: absolute;
   top: 1px;
@@ -500,7 +604,7 @@
   justify-content: center;
 }
 
-/* --- 07 · POST-EXAM DOSSIER (SUBMISSION RECEIPT) -------------------------- */
+/* --- 07 · POST-EXAM DOSSIER ----------------------------------------------- */
 .dossier-head {
   padding: 30px;
 }
@@ -552,7 +656,7 @@
   text-transform: uppercase;
   color: var(--ink);
 }
-.verdict.is-dq {
+.verdict.is-bad {
   border-left-color: var(--crimson);
   color: var(--crimson);
   background: var(--crimson-dim);
