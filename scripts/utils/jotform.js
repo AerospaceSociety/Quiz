@@ -8,7 +8,7 @@ import { CFG, S } from '../core/state.js';
 
 export async function submitAssessmentToJotForm(dossier) {
   const jfConfig = CFG.settings.jotform || {};
-  const formId = jfConfig.formId || '261896133006456';
+  const formId = jfConfig.formId || '262450769915063';
   const fieldMap = jfConfig.fieldMap || {
     school_name: '2',
     contact_name: '3',
@@ -65,15 +65,16 @@ export async function submitAssessmentToJotForm(dossier) {
   try {
     const formData = new FormData();
     formData.append('formID', formId);
-    formData.append(`q${fieldMap.school_name}_schoolName`, cand.school || 'Delhi Public School, R.K. Puram');
-    formData.append(`q${fieldMap.contact_name}_contactName`, cand.name || 'Candidate');
-    formData.append(`q${fieldMap.contact_email}_contactEmail`, `${(cand.id || 'cand').toLowerCase().replace(/[^a-z0-9]/g, '')}@aeross.org`);
-    formData.append(`q${fieldMap.contact_phone}_contactPhone`, cand.code || 'CELESTE2026');
-    formData.append(`q${fieldMap.events_selected}_eventsSelected[0]`, 'Quizzitch');
-    formData.append(`q${fieldMap.registration_summary}_registrationSummary`, summaryText);
-    formData.append(`q${fieldMap.registration_json}_registrationJson`, JSON.stringify(submissionPayload));
-    formData.append(`q${fieldMap.total_teams}_totalTeams`, '1');
-    formData.append(`q${fieldMap.total_participants}_totalParticipants`, '1');
+    formData.append('simple_spc', `${formId}-${formId}`);
+    if (fieldMap.school_name) formData.append(`q${fieldMap.school_name}_schoolName`, cand.school || 'Delhi Public School, R.K. Puram');
+    if (fieldMap.contact_name) formData.append(`q${fieldMap.contact_name}_contactName`, cand.name || 'Candidate');
+    if (fieldMap.contact_email) formData.append(`q${fieldMap.contact_email}_contactEmail`, `${(cand.id || 'cand').toLowerCase().replace(/[^a-z0-9]/g, '')}@aeross.org`);
+    if (fieldMap.contact_phone) formData.append(`q${fieldMap.contact_phone}_contactPhone`, cand.code || 'CELESTE2026');
+    if (fieldMap.events_selected) formData.append(`q${fieldMap.events_selected}_eventsSelected[0]`, 'Quizzitch');
+    if (fieldMap.registration_summary) formData.append(`q${fieldMap.registration_summary}_registrationSummary`, summaryText);
+    if (fieldMap.registration_json) formData.append(`q${fieldMap.registration_json}_registrationJson`, JSON.stringify(submissionPayload));
+    if (fieldMap.total_teams) formData.append(`q${fieldMap.total_teams}_totalTeams`, '1');
+    if (fieldMap.total_participants) formData.append(`q${fieldMap.total_participants}_totalParticipants`, '1');
 
     await fetch(`https://submit.jotform.com/submit/${formId}`, {
       method: 'POST',
