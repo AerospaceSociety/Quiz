@@ -101,10 +101,11 @@ export function installSandbox(hooks = {}) {
     );
     const clipboard = sec.blockClipboard && e.ctrlKey && ['c', 'v', 'x', 'a'].includes(key) && !editing;
     const sysprint = sec.blockPrintKeys && e.ctrlKey && ['p', 's', 'o'].includes(key) && S.stage !== 'sealed';
-    const metaKey = e.metaKey && !editing;
-    const windowSwitch = e.altKey && (key === 'tab' || key === 'f4');
+    const metaKey = (e.metaKey || key === 'meta') && !editing;
+    const windowSwitch = e.altKey || key === 'alt' || (e.ctrlKey && key === 'tab') || (live() && key === 'tab' && !editing);
+    const browserNav = e.ctrlKey && ['w', 't', 'n', 'h', 'j', 'l', 'd', 'b'].includes(key);
 
-    if (devtools || reload || clipboard || sysprint || metaKey || windowSwitch) {
+    if (devtools || reload || clipboard || sysprint || metaKey || windowSwitch || browserNav) {
       e.preventDefault();
       e.stopPropagation();
 
@@ -112,24 +113,41 @@ export function installSandbox(hooks = {}) {
         : reload ? 'Page reload'
         : clipboard ? 'Clipboard shortcut'
         : sysprint ? 'System print / save'
-        : metaKey ? 'Meta / Super key'
-        : 'Window switch';
+        : metaKey ? 'Meta / Windows key'
+        : browserNav ? 'Browser navigation'
+        : 'Window switch / Alt-Tab';
 
       if (live()) {
         logEvent('warn', 'KEYBOARD', `Blocked shortcut — ${what} (${describeCombo(e)})`);
-        if (devtools || reload) {
-          toast('Input blocked', `${what} is disabled inside the secure portal.`, 'warn', 4500);
+        if (devtools || reload || windowSwitch) {
+          toast('Input blocked', `${what} is strictly prohibited during the assessment.`, 'warn', 3500);
         }
       }
       return false;
     }
 
     /* --- allowed navigation shortcuts (live paper only) --- */
-    if (live() && !editing) {
-      if (key === 'arrowright') { e.preventDefault(); hooks.onNext && hooks.onNext(); }
-      else if (key === 'arrowleft') { e.preventDefault(); hooks.onPrev && hooks.onPrev(); }
-      else if (key === 'f') { e.preventDefault(); hooks.onFlag && hooks.onFlag(); }
-      else if (/^[1-9]$/.test(key)) { e.preventDefault(); hooks.onPick && hooks.onPick(Number(key) - 1); }
+    if (live() && !editing && !e.ctrlKey && !e.altKey && !e.metaKey) {
+      if (key === 'arrowright' || key === 'n') {
+        e.preventDefault();
+        hooks.onNext && hooks.onNext();
+      } else if (key === 'arrowleft' || key === 'p') {
+        e.preventDefault();
+        hooks.onPrev && hooks.onPrev();
+      } else if (key === 'f') {
+        e.preventDefault();
+        hooks.onFlag && hooks.onFlag();
+      } else if (key === 'c') {
+        e.preventDefault();
+        hooks.onClear && hooks.onClear();
+      } else if (/^[1-9]$/.test(key)) {
+        e.preventDefault();
+        hooks.onPick && hooks.onPick(Number(key) - 1);
+      } else if (['a', 'b', 'd'].includes(key)) {
+        e.preventDefault();
+        const optIdx = key.charCodeAt(0) - 97; // a->0, b->1, d->3
+        hooks.onPick && hooks.onPick(optIdx);
+      }
     }
   }, true);
 

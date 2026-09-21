@@ -59,6 +59,10 @@ export const EV = {
   OBJECT_DETECTED: 'object_detected', // AI object detection result
   GATES: 'gates',            // gate evaluation
   SEALED: 'sealed',          // dossier payload ready
+  FULLSCREEN: 'fullscreen',  // fullscreen state toggled
+  FS_BREACH: 'fs_breach',    // fullscreen exit breach modal {tries, max, remaining}
+  REVIEW_DRAWER: 'review_drawer', // review drawer toggle
+  FINAL_REVIEW: 'final_review',   // final summary modal toggle
   INTENT_NAV: 'intent:nav',
   INTENT_PICK: 'intent:pick',
   INTENT_MODULE: 'intent:module'
@@ -72,6 +76,8 @@ export const S = {
   degraded: false,
   sessionId: '',
   bootedAt: null,
+  reviewDrawerOpen: false,
+  finalReviewOpen: false,
 
   /* candidate credentials */
   candidate: {
@@ -79,7 +85,11 @@ export const S = {
     name: '',
     id: '',
     grade: '',
-    school: ''
+    school: '',
+    teamId: '',
+    teamName: '',
+    memberId: '',
+    email: ''
   },
 
   /* schedule */
@@ -113,6 +123,8 @@ export const S = {
   strikes: 0,
   blurCount: 0,
   fsBreaches: 0,
+  fsExitTries: 0,
+  maxFsExitTries: 3,
   opticalFlags: 0,
   lastFocusTs: 0,
   log: [],
@@ -138,9 +150,9 @@ export const S = {
 /**
  * Pools questions from raw bank (e.g. 5 per module, 20 total) and shuffles options.
  */
-export function buildQuestionSession() {
+export function buildQuestionSession(customQuestions = null) {
   const poolCfg = CFG.settings.questionPool || { enabled: true, totalItemsPerSession: 20, itemsPerModule: 5 };
-  const raw = CFG.rawQuestions || [];
+  const raw = customQuestions || CFG.rawQuestions || [];
 
   let selected = [];
   const modules = CFG.modules || [];
@@ -203,6 +215,8 @@ export function initResponses() {
     sel: [],
     selectedTexts: [],
     flagged: false,
+    visited: false,
+    skipped: false,
     visits: 0,
     timeMs: 0
   }));
@@ -333,4 +347,6 @@ export function commitDwell() {
 }
 
 export const answeredCount = () => S.responses.filter((r) => r && r.sel && r.sel.length > 0).length;
+export const skippedCount = () => S.responses.filter((r) => r && (!r.sel || r.sel.length === 0) && (r.visited || r.visits > 0 || r.skipped)).length;
+export const unattemptedCount = () => Math.max(0, CFG.questions.length - answeredCount());
 export const flaggedCount = () => S.responses.filter((r) => r && r.flagged).length;

@@ -45,7 +45,6 @@
       "AEROSS-QZ-03",
       "DPSRKP-QZ-26",
       "QUALIFIER-2026",
-      "DEMO-ACCESS-26",
       "QUIZZITCH-VIP"
     ],
     "pattern": "^(CC26|QZ|AEROSS)-[A-Z0-9]{4,8}$"
@@ -56,7 +55,7 @@
     "redockSeconds": 10,
     "focusAckSeconds": 15,
     "focusDedupeMs": 1500,
-    "requireFullscreen": false,
+    "requireFullscreen": true,
     "blockContextMenu": true,
     "blockClipboard": true,
     "blockSelection": true,
@@ -149,12 +148,24 @@
   ],
 
   "registry": {
-    "idPrefix": "CC26-QZ-",
-    "idPattern": "^CC26-QZ-[0-9]{4}$",
-    "idPlaceholder": "CC26-QZ-0000",
-    "minNameLength": 3,
+    "idPrefix": "CLT-2026-",
+    "idPattern": "^(CLT-2026-[A-Z0-9-]+|CC26-[A-Z0-9-]+|[A-Z0-9-]{4,30})$",
+    "idPlaceholder": "CLT-2026-SCH-00042-QUIZ-T1",
+    "minNameLength": 2,
     "defaultSchool": "Delhi Public School, R.K. Puram",
     "grades": ["VI", "VII", "VIII", "IX", "X", "XI", "XII"]
+  },
+
+  "firebase": {
+    "enabled": true,
+    "apiKey": "AIzaSyACBSgQ3Vo04Ph6NOgafTVnqH5pxOnt0vI",
+    "authDomain": "quizzitch-14998.firebaseapp.com",
+    "projectId": "quizzitch-14998",
+    "storageBucket": "quizzitch-14998.firebasestorage.app",
+    "messagingSenderId": "503716999814",
+    "appId": "1:503716999814:web:d8546bab8aec8c4f91d707",
+    "measurementId": "G-HE35W5TQRS",
+    "collection": "quizzitch_questions"
   },
 
   "briefing": [
@@ -162,7 +173,7 @@
     "<b>Fullscreen Security:</b> The examination must remain in fullscreen mode throughout the test.",
     "<b>Focus Discipline:</b> Navigating away from the window or switching tabs is flagged in the integrity log.",
     "<b>Proctoring & AI Recognition:</b> Webcam feed is monitored for candidate presence and unauthorized devices (phones, books, secondary screens).",
-    "<b>No Answer Keys Stored:</b> Responses are recorded securely and submitted directly to JotForm upon completion.",
+    "<b>No Answer Keys Stored:</b> Responses are recorded securely with client-side hashing and sealed upon completion.",
     "<b>Free Navigation:</b> You may navigate freely across modules, review responses, and flag questions before final submission."
   ],
 

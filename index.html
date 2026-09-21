@@ -52,6 +52,9 @@
     </div>
 
     <div class="hud__meta">
+      <button class="btn btn--ghost btn--xs hud__fs-btn" id="btn-fs-toggle" type="button" title="Toggle Fullscreen Mode">
+        <span class="fs-icon">⤢</span> <span class="fs-label">Fullscreen</span>
+      </button>
       <span class="badge badge--accent" id="badge-round">Round 1 Qualifier</span>
       <span class="badge badge--muted" id="badge-cand">CAND · <b>—</b></span>
       <span class="badge badge--live" id="badge-stage"><i class="dot dot--pulse"></i> Pre-flight</span>
@@ -64,6 +67,13 @@
     </div>
   </header>
 
+  <!-- Fullscreen Re-dock Advisory Prompt -->
+  <aside class="fs-advisory-banner" id="fs-advisory-banner" hidden>
+    <div class="fs-advisory-content">
+      <span>⚠️ <strong>Fullscreen Mode Exited:</strong> Assessment integrity protocol requires full-screen containment.</span>
+      <button class="btn btn--primary btn--sm" id="btn-reenter-fs" type="button">Re-enter Fullscreen Now</button>
+    </div>
+  </aside>
 
   <!-- ══════════════════════════════════════════════════════════════════════
      STAGE 0 — CANDIDATE AUTHENTICATION & PROCTORING CALIBRATION
@@ -81,7 +91,7 @@
         </div>
         <h1 class="hero__title">Candidate <span>Authentication</span> &amp; Setup</h1>
         <p class="hero__sub">
-          Please complete authentication with your unique access code, confirm your registration details,
+          Please enter your Team ID to fetch your registered team roster, select your name, confirm your details,
           and calibrate your optical proctoring link before entering the examination waiting lounge.
         </p>
         <div class="hero__strip" id="hero-modules"></div>
@@ -89,33 +99,50 @@
 
       <div class="grid grid--2 grid--stretch">
 
-        <!-- STEP 01 — CANDIDATE AUTHENTICATION & UNIQUE CODE -->
+        <!-- STEP 01 — CANDIDATE AUTHENTICATION & TEAM ID LOOKUP -->
         <section class="panel">
           <header class="panel__head">
-            <h2 class="panel__title">Step 1 — Identity &amp; Access Code Verification</h2>
-            <span class="badge badge--muted" id="reg-badge">Verification</span>
+            <h2 class="panel__title">Step 1 — Team ID &amp; Candidate Identity Verification</h2>
+            <span class="badge badge--muted" id="reg-badge">Verified Registry</span>
           </header>
           <div class="panel__body">
             <div class="field field--code">
-              <label for="in-code">Unique Access Code <span style="color:#F43F5E">*</span></label>
-              <input id="in-code" type="text" autocomplete="off" spellcheck="false" maxlength="24"
-                placeholder="e.g. CELESTE2026 or AEROSS-QZ-01">
-              <p class="field__hint" id="hint-code">Enter the unique code provided in your CelesteCon invitation ticket
-              </p>
+              <label for="in-team-id">Team ID / Registration UID <span style="color:#F43F5E">*</span></label>
+              <div class="field-with-btn">
+                <input id="in-team-id" type="text" autocomplete="off" spellcheck="false" maxlength="40"
+                  placeholder="e.g. CLT-2026-SCH-00042-QUIZ-T1">
+                <button class="btn btn--primary btn--sm" id="btn-verify-team" type="button">Verify &amp; Load</button>
+              </div>
+              <p class="field__hint" id="hint-team-id">Enter your assigned Team ID to fetch registered members and autofill details</p>
             </div>
 
+            <!-- Verified Team Summary Card (shown when loaded) -->
+            <div class="team-verified-card" id="team-verified-card" hidden>
+              <div class="tvc-head">
+                <span class="badge badge--live">✓ Verified Contingent</span>
+                <span class="tvc-members" id="tv-members">2 Participants</span>
+              </div>
+              <div class="tvc-body">
+                <div class="tvc-school" id="tv-school">Delhi Public School, R.K. Puram</div>
+                <div class="tvc-team" id="tv-team">AEROSS Orbiters · CLT-2026-SCH-00042-QUIZ-T1</div>
+              </div>
+            </div>
+
+            <!-- Candidate Name Dropdown (Selecting Name Autofills Details) -->
             <div class="field">
-              <label for="in-name">Candidate Full Name <span style="color:#F43F5E">*</span></label>
-              <input id="in-name" type="text" autocomplete="off" spellcheck="false" maxlength="60"
-                placeholder="Full Name as registered">
+              <label for="in-name-select">Candidate Full Name <span style="color:#F43F5E">*</span></label>
+              <select id="in-name-select">
+                <option value="">— Enter Team ID Above to Load Roster —</option>
+              </select>
+              <p class="field__hint" id="hint-name-select">Choose your registered name from the loaded roster</p>
             </div>
 
             <div class="field-row">
               <div class="field">
-                <label for="in-id">Registration ID <span style="color:#F43F5E">*</span></label>
-                <input id="in-id" type="text" autocomplete="off" spellcheck="false" maxlength="20"
-                  placeholder="CC26-QZ-0000">
-                <p class="field__hint" id="hint-id">Format CC26-QZ-XXXX</p>
+                <label for="in-id">Assigned Team / Candidate ID <span style="color:#F43F5E">*</span></label>
+                <input id="in-id" type="text" autocomplete="off" spellcheck="false" maxlength="40"
+                  placeholder="CLT-2026-SCH-XXXXX-QUIZ-T1" readonly>
+                <p class="field__hint" id="hint-id">Autofilled from verified team</p>
               </div>
               <div class="field">
                 <label for="in-grade">Class / Grade <span style="color:#F43F5E">*</span></label>
@@ -127,13 +154,17 @@
 
             <div class="field">
               <label for="in-school">School / Institution <span style="color:#F43F5E">*</span></label>
-              <input id="in-school" type="text" autocomplete="off" spellcheck="false" maxlength="80"
-                placeholder="Delhi Public School, R.K. Puram">
+              <input id="in-school" type="text" autocomplete="off" spellcheck="false" maxlength="100"
+                placeholder="School name as registered" readonly>
             </div>
+
+            <!-- Hidden inputs for candidate name & code synchronization -->
+            <input id="in-name" type="hidden" value="">
+            <input id="in-code" type="hidden" value="">
 
             <div class="kv-strip">
               <span>Session Ref <b id="sess-id">—</b></span>
-              <span>Security <b id="sess-sec">JotForm Cloud Direct</b></span>
+              <span>Security <b id="sess-sec">Encrypted Session Vault</b></span>
             </div>
           </div>
         </section>
@@ -344,29 +375,26 @@
         </section>
 
         <section class="panel panel--flush">
-          <header class="panel__head">
+          <header class="panel__head" style="display:flex; justify-content:space-between; align-items:center;">
             <h2 class="panel__title">Question Navigator</h2>
             <span class="badge badge--muted" id="matrix-cat">M-01</span>
           </header>
+          <div style="padding:10px 14px 4px;">
+            <button class="btn btn--primary btn--sm btn--block review-nav-btn" id="btn-open-review" type="button">
+              📋 Review Questions (<span id="rev-btn-counter">0 Marked · 20 Skipped</span>)
+            </button>
+          </div>
           <div class="matrix-tabs" id="matrix-tabs" role="tablist"></div>
           <div class="matrix" id="matrix"></div>
           <div class="legend">
-            <span><i class="is-answered"></i> Answered</span>
+            <span><i class="is-answered"></i> Marked (Green)</span>
+            <span><i class="is-skipped"></i> Skipped (Red)</span>
             <span><i class="is-flagged"></i> Flagged</span>
             <span><i class="is-current"></i> Current</span>
-            <span><i></i> Unvisited</span>
           </div>
         </section>
 
-        <section class="panel panel--flush">
-          <header class="panel__head">
-            <h2 class="panel__title">Proctoring Integrity Log</h2>
-            <span class="badge badge--danger" id="log-count">0</span>
-          </header>
-          <div class="logbox" id="logbox" role="log" aria-live="off"></div>
-        </section>
-
-        <button class="btn btn--primary btn--block" id="btn-submit" type="button">Submit Assessment</button>
+        <button class="btn btn--primary btn--block submit-rail-btn" id="btn-submit" type="button">Submit Assessment</button>
       </aside>
 
       <!-- ── CENTRE QUESTION CARD ── -->
@@ -415,7 +443,7 @@
 
   <!-- ══════════════════════════════════════════════════════════════════════
      STAGE 3 — POST-EXAM SUBMISSION RECEIPT
-     (Answers not stored locally, recorded to JotForm)
+     (Answers sealed with integrity hashing & JSON downloaded)
      ══════════════════════════════════════════════════════════════════ -->
   <main class="screen" id="screen-dossier" hidden aria-label="Assessment Receipt">
     <div class="wrap stack">
@@ -448,17 +476,24 @@
               <dd id="dos-stamp">—</dd>
             </div>
             <div>
-              <dt>JotForm Ref</dt>
-              <dd id="dos-jf-id" style="color:#34D399;">RECORDED</dd>
+              <dt>Audit Receipt</dt>
+              <dd id="dos-jf-id" style="color:#34D399;">SEALED</dd>
             </div>
           </dl>
         </div>
 
-        <p class="verdict" id="dos-verdict">Assessment Successfully Recorded to JotForm</p>
+        <p class="verdict" id="dos-verdict">Assessment Choices Successfully Recorded &amp; Sealed</p>
+
+        <div class="dossier-confirm-card">
+          <span class="badge badge--live">✓ Recorded in Firebase Database</span>
+          <p class="dcc-text">Your responses have been transmitted to the central examination database and sealed with cryptographic integrity hash verification.</p>
+        </div>
 
         <div class="scoregrid">
-          <div class="scoregrid__cell"><span class="k">Questions Attempted</span><span class="v"
+          <div class="scoregrid__cell"><span class="k">Questions Attempted</span><span class="v is-ok"
               id="dos-answered">0<small>/20</small></span></div>
+          <div class="scoregrid__cell"><span class="k">Questions Skipped</span><span class="v is-bad"
+              id="dos-skipped">0<small>/20</small></span></div>
           <div class="scoregrid__cell"><span class="k">Time Consumed</span><span class="v" id="dos-time">00:00</span>
           </div>
           <div class="scoregrid__cell"><span class="k">Submission Status</span><span class="v" id="dos-verdict-tag"
@@ -495,7 +530,6 @@
           <span>Transmission Timestamp <b id="dos-gen">—</b></span>
         </div>
         <div class="btn-row">
-          <button class="btn btn--ghost btn--sm" id="btn-export-json" type="button">Download Submission JSON</button>
           <button class="btn btn--primary btn--sm" id="btn-print" type="button">Print / Save PDF</button>
         </div>
       </div>
@@ -516,6 +550,119 @@
     <div class="toast__content">
       <strong id="toast-title"></strong>
       <p id="toast-body"></p>
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════════════════════════════════════════
+     QUESTION ATTEMPT REVIEW DRAWER (SLIDE-OVER / PALETTE)
+     ══════════════════════════════════════════════════════════════════ -->
+  <div class="drawer-backdrop" id="drawer-review" hidden>
+    <div class="drawer-panel" role="dialog" aria-modal="true" aria-label="Question Review Drawer">
+      <header class="drawer-head">
+        <div>
+          <h2 class="drawer-title">Question Attempt Palette</h2>
+          <p class="drawer-sub">Review answers before final submission. Green = Marked, Red = Skipped.</p>
+        </div>
+        <button class="btn btn--ghost btn--sm" id="btn-close-review" type="button" aria-label="Close Review">✕ Close</button>
+      </header>
+
+      <div class="review-filter-bar">
+        <button class="review-filter-chip is-active" data-filter="all" type="button">All (<span id="rev-count-all">20</span>)</button>
+        <button class="review-filter-chip filter--marked" data-filter="marked" type="button">🟢 Marked (<span id="rev-count-marked">0</span>)</button>
+        <button class="review-filter-chip filter--skipped" data-filter="skipped" type="button">🔴 Skipped (<span id="rev-count-skipped">20</span>)</button>
+        <button class="review-filter-chip filter--flagged" data-filter="flagged" type="button">🟡 Flagged (<span id="rev-count-flagged">0</span>)</button>
+      </div>
+
+      <div class="drawer-body" id="drawer-review-items"></div>
+
+      <footer class="drawer-foot">
+        <button class="btn btn--ghost btn--sm" type="button" onclick="document.getElementById('btn-close-review').click()">Back to Paper</button>
+        <button class="btn btn--primary btn--sm" type="button" onclick="document.getElementById('btn-close-review').click(); document.getElementById('btn-submit').click();">Proceed to Final Submission ▶</button>
+      </footer>
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════════════════════════════════════════
+     FINAL PRE-SUBMISSION SUMMARY & TOTAL SCREEN
+     ══════════════════════════════════════════════════════════════════ -->
+  <div class="modal-backdrop" id="modal-final-review" hidden>
+    <div class="modal-card" role="dialog" aria-modal="true" aria-label="Final Assessment Review">
+      <header class="modal-head">
+        <div>
+          <span class="badge badge--accent-solid" style="margin-bottom:8px;">Pre-Submission Verification</span>
+          <h2 class="modal-title">Assessment Summary &amp; Totals</h2>
+          <p class="modal-sub">Confirm your recorded attempts before final sealing and submission.</p>
+        </div>
+      </header>
+
+      <div class="final-summary-stats">
+        <div class="stat-box">
+          <span class="stat-k">Total Items</span>
+          <span class="stat-v" id="fin-total-items">20</span>
+        </div>
+        <div class="stat-box stat-box--green">
+          <span class="stat-k">Total Marked</span>
+          <span class="stat-v" id="fin-marked-count">0</span>
+        </div>
+        <div class="stat-box stat-box--red">
+          <span class="stat-k">Total Skipped</span>
+          <span class="stat-v" id="fin-skipped-count">20</span>
+        </div>
+        <div class="stat-box stat-box--warn">
+          <span class="stat-k">Flagged</span>
+          <span class="stat-v" id="fin-flagged-count">0</span>
+        </div>
+      </div>
+
+      <div class="tablewrap" style="max-height: 280px; overflow-y: auto; margin: 16px 0; border: 1px solid var(--border-sub);">
+        <table class="table">
+          <thead>
+            <tr>
+              <th class="num">#</th>
+              <th>Module</th>
+              <th>Status</th>
+              <th>Candidate Selection</th>
+              <th class="num">Action</th>
+            </tr>
+          </thead>
+          <tbody id="fin-items-tbody"></tbody>
+        </table>
+      </div>
+
+      <footer class="modal-foot">
+        <button class="btn btn--ghost" id="btn-fin-return" type="button">◀ Return to Assessment</button>
+        <button class="btn btn--primary btn--lg" id="btn-fin-submit" type="button">Confirm &amp; Final Submit Assessment ▶</button>
+      </footer>
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════════════════════════════════════════
+     FORCED FULLSCREEN CONTAINMENT MODAL (ESC / EXIT INTERCEPTION)
+     ══════════════════════════════════════════════════════════════════ -->
+  <div class="fs-forced-backdrop" id="modal-fs-forced" hidden>
+    <div class="fs-forced-card" role="alertdialog" aria-modal="true" aria-label="Fullscreen Containment Alert">
+      <div class="fs-forced-icon">⚠️</div>
+      <h2 class="fs-forced-title" id="fs-forced-title">FULLSCREEN MODE REQUIRED</h2>
+      <p class="fs-forced-sub" id="fs-forced-sub">
+        Continuous fullscreen containment is mandatory for assessment integrity.
+      </p>
+
+      <div class="fs-strike-box" id="fs-strike-box">
+        <span class="fs-strike-label">Fullscreen Exit Violations:</span>
+        <div class="fs-strike-pips" id="fs-strike-pips">
+          <span class="fs-pip" data-i="1">1</span>
+          <span class="fs-pip" data-i="2">2</span>
+          <span class="fs-pip" data-i="3">3</span>
+        </div>
+        <p class="fs-strike-warn" id="fs-strike-warn">
+          Attempt <b><span id="fs-current-try">1</span> of 3</b>. If you exit fullscreen 3 times, your exam will be <b>automatically sealed and submitted</b>.
+        </p>
+      </div>
+
+      <button class="btn btn--accent btn--lg fs-force-btn pulse" id="btn-force-fullscreen" type="button">
+        ⤢ Click Anywhere to Re-enter Fullscreen &amp; Resume
+      </button>
+      <p class="fs-subtext">Click anywhere or press any key to immediately re-enter fullscreen.</p>
     </div>
   </div>
 

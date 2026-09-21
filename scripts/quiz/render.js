@@ -6,7 +6,7 @@
 import {
   CFG, S, bus, EV, Vault,
   scheme, moduleOf, clamp, esc,
-  answeredCount, flaggedCount
+  answeredCount, skippedCount, unattemptedCount, flaggedCount
 } from '../core/state.js';
 
 import { pad, mmss, wallTime, stampUTC } from '../utils/timer.js';
@@ -267,7 +267,7 @@ function renderOptions(q, r, sc) {
   });
 }
 
-/* --- 06 · QUESTION MATRIX ------------------------------------------------- */
+/* --- 06 · QUESTION MATRIX & PALETTE --------------------------------------- */
 export function renderMatrix() {
   const mod = moduleOf(S.activeModule);
   setText('matrix-cat', `${mod.code} · ${mod.short}`);
@@ -285,15 +285,18 @@ export function renderMatrix() {
 
   CFG.questions.forEach((q, i) => {
     if (q.catId !== S.activeModule) return;
-    const r = S.responses[i];
+    const r = S.responses[i] || { sel: [], flagged: false, visited: false, skipped: false };
+    const isAnswered = r.sel && r.sel.length > 0;
+    const isSkipped = !isAnswered && (r.visited || r.visits > 0 || r.skipped);
+
     const b = document.createElement('button');
     b.type = 'button';
     b.className = 'matrix-cell'
-      + (r.sel.length ? ' is-answered' : '')
+      + (isAnswered ? ' is-answered' : isSkipped ? ' is-skipped' : '')
       + (r.flagged ? ' is-flagged' : '')
       + (i === S.idx ? ' is-current' : '');
     b.textContent = pad(i + 1);
-    b.title = `Item ${i + 1}: ${moduleOf(q.catId).short}`;
+    b.title = `Item ${i + 1}: ${moduleOf(q.catId).short} (${isAnswered ? 'Marked / Answered' : isSkipped ? 'Skipped' : 'Unvisited'})`;
     b.addEventListener('click', () => bus.emit(EV.INTENT_NAV, i));
     host.appendChild(b);
   });
@@ -302,6 +305,7 @@ export function renderMatrix() {
 export function renderProgress() {
   const total = CFG.questions.length;
   const answered = answeredCount();
+  const skipped = skippedCount();
   const flagged = flaggedCount();
 
   setText('tel-answered', `${answered} / ${total}`);
@@ -311,6 +315,12 @@ export function renderProgress() {
   setBar('tel-flagged-bar', (flagged / total) * 100);
 
   setText('q-progress', `${pad(answered)} / ${pad(total)} answered`);
+
+  // Update Review Drawer trigger button counters
+  const revBtnCounter = el('rev-btn-counter');
+  if (revBtnCounter) {
+    revBtnCounter.textContent = `${answered} Marked · ${skipped} Skipped`;
+  }
 }
 
 /* --- 07 · CLOCK & STRIKES ------------------------------------------------- */
@@ -462,6 +472,209 @@ export function paintObjectDetection(detection) {
   }
 }
 
+/* --- 09.5 · QUESTION REVIEW DRAWER & PRE-SUBMISSION MODAL ----------------- */
+let activeReviewFilter = 'all';
+
+export function paintReviewDrawerState(isOpen) {
+  const drawer = el('drawer-review');
+  if (!drawer) return;
+  drawer.classList.toggle('is-open', isOpen);
+  drawer.hidden = !isOpen;
+  if (isOpen) renderReviewDrawer(activeReviewFilter);
+}
+
+export function setReviewFilter(filter) {
+  activeReviewFilter = filter;
+  renderReviewDrawer(filter);
+}
+
+export function renderReviewDrawer(filter = 'all') {
+  activeReviewFilter = filter;
+  const host = el('drawer-review-items');
+  if (!host) return;
+  host.innerHTML = '';
+
+  const total = CFG.questions.length;
+  const answered = answeredCount();
+  const skipped = unattemptedCount();
+  const flagged = flaggedCount();
+
+  setText('rev-count-all', String(total));
+  setText('rev-count-marked', String(answered));
+  setText('rev-count-skipped', String(skipped));
+  setText('rev-count-flagged', String(flagged));
+
+  // Update active tab chips
+  const chips = document.querySelectorAll('.review-filter-chip');
+  chips.forEach((chip) => {
+    chip.classList.toggle('is-active', chip.dataset.filter === filter);
+  });
+
+  CFG.questions.forEach((q, i) => {
+    const r = S.responses[i] || { sel: [], flagged: false, visited: false, skipped: false, selectedTexts: [] };
+    const isAnswered = r.sel && r.sel.length > 0;
+    const isSkipped = !isAnswered;
+
+    if (filter === 'marked' && !isAnswered) return;
+    if (filter === 'skipped' && !isSkipped) return;
+    if (filter === 'flagged' && !r.flagged) return;
+
+    const mod = moduleOf(q.catId);
+
+    const card = document.createElement('div');
+    card.className = 'review-card'
+      + (isAnswered ? ' is-marked' : ' is-skipped')
+      + (r.flagged ? ' is-flagged' : '')
+      + (i === S.idx ? ' is-current' : '');
+
+    const statusBadge = isAnswered
+      ? `<span class="badge badge--green">🟢 Marked (${r.sel.map((x) => CFG.letters[x]).join(', ')})</span>`
+      : `<span class="badge badge--red">🔴 Skipped</span>`;
+
+    const flagBadge = r.flagged ? `<span class="badge badge--warn">⚑ Flagged</span>` : '';
+
+    card.innerHTML = `
+      <div class="review-card__header">
+        <div class="review-card__left">
+          <span class="review-card__num">Item ${pad(i + 1)}</span>
+          <span class="review-card__mod">${esc(mod.code)} · ${esc(mod.short)}</span>
+        </div>
+        <div class="review-card__status">${statusBadge} ${flagBadge}</div>
+      </div>
+      <div class="review-card__question">${esc(q.question)}</div>
+      <div class="review-card__footer">
+        <span class="review-card__choice">${isAnswered ? `Choice: <b>${esc(r.selectedTexts.join(' | '))}</b>` : '<span style="color:var(--crimson)">Unanswered</span>'}</span>
+        <button class="btn btn--sm btn--primary review-jump-btn" type="button">Go to Question ↗</button>
+      </div>
+    `;
+
+    const jumpBtn = card.querySelector('.review-jump-btn');
+    if (jumpBtn) {
+      jumpBtn.addEventListener('click', () => {
+        bus.emit(EV.REVIEW_DRAWER, false);
+        bus.emit(EV.INTENT_NAV, i);
+      });
+    }
+
+    host.appendChild(card);
+  });
+}
+
+export function paintFinalReviewState(isOpen) {
+  const modal = el('modal-final-review');
+  if (!modal) return;
+  modal.classList.toggle('is-open', isOpen);
+  modal.hidden = !isOpen;
+  if (isOpen) renderFinalReviewModal();
+}
+
+export function renderFinalReviewModal() {
+  const total = CFG.questions.length;
+  const answered = answeredCount();
+  const skipped = unattemptedCount();
+  const flagged = flaggedCount();
+
+  setText('fin-total-items', String(total));
+  setText('fin-marked-count', String(answered));
+  setText('fin-skipped-count', String(skipped));
+  setText('fin-flagged-count', String(flagged));
+
+  const tableBody = el('fin-items-tbody');
+  if (!tableBody) return;
+  tableBody.innerHTML = '';
+
+  CFG.questions.forEach((q, i) => {
+    const r = S.responses[i] || { sel: [], flagged: false, visited: false, skipped: false, selectedTexts: [] };
+    const isAnswered = r.sel && r.sel.length > 0;
+    const mod = moduleOf(q.catId);
+
+    const tr = document.createElement('tr');
+    tr.className = isAnswered ? 'row-marked' : 'row-skipped';
+
+    const statusPill = isAnswered
+      ? `<span class="badge badge--green">🟢 Marked (${r.sel.map((x) => CFG.letters[x]).join(', ')})</span>`
+      : `<span class="badge badge--red">🔴 Skipped</span>`;
+
+    const choicePreview = isAnswered
+      ? esc(r.selectedTexts.join(' | '))
+      : '<span style="color:var(--crimson); font-style:italic;">Not Attempted</span>';
+
+    tr.innerHTML = `
+      <td class="num"><b>${pad(i + 1)}</b></td>
+      <td>${esc(mod.short)}</td>
+      <td>${statusPill} ${r.flagged ? '<span class="badge badge--warn">⚑</span>' : ''}</td>
+      <td>${choicePreview}</td>
+      <td class="num"><button type="button" class="btn btn--xs btn--ghost fin-jump-btn">Edit</button></td>
+    `;
+
+    const jumpBtn = tr.querySelector('.fin-jump-btn');
+    if (jumpBtn) {
+      jumpBtn.addEventListener('click', () => {
+        bus.emit(EV.FINAL_REVIEW, false);
+        bus.emit(EV.INTENT_NAV, i);
+      });
+    }
+
+    tableBody.appendChild(tr);
+  });
+}
+
+export function showFullscreenPrompt(showPrompt) {
+  const banner = el('fs-advisory-banner');
+  if (banner) banner.hidden = !showPrompt;
+}
+
+export function showForcedFullscreenModal(tries = 1, max = 3) {
+  const modal = el('modal-fs-forced');
+  if (!modal) return;
+  modal.hidden = false;
+
+  const title = el('fs-forced-title');
+  const sub = el('fs-forced-sub');
+  const strikeBox = el('fs-strike-box');
+  const forceBtn = el('btn-force-fullscreen');
+
+  if (tries === 0) {
+    if (title) title.textContent = 'FULLSCREEN REQUIRED TO BEGIN';
+    if (sub) sub.textContent = 'Continuous fullscreen containment is required for this official assessment. Click anywhere to activate full screen.';
+    if (strikeBox) strikeBox.hidden = true;
+    if (forceBtn) forceBtn.textContent = '⤢ Click Anywhere to Engage Fullscreen & Start';
+  } else {
+    if (title) title.textContent = 'FULLSCREEN MODE REQUIRED';
+    if (sub) sub.textContent = 'Continuous fullscreen containment is mandatory for assessment integrity.';
+    if (strikeBox) strikeBox.hidden = false;
+    if (forceBtn) forceBtn.textContent = '⤢ Click Anywhere to Re-enter Fullscreen & Resume';
+
+    setText('fs-current-try', String(tries));
+
+    const pips = el('fs-strike-pips');
+    if (pips) {
+      pips.querySelectorAll('.fs-pip').forEach((pip, i) => {
+        pip.classList.toggle('is-armed', i < tries);
+      });
+    }
+
+    const warn = el('fs-strike-warn');
+    if (warn) {
+      const remaining = Math.max(0, max - tries);
+      warn.innerHTML = `Attempt <b>${tries} of ${max}</b> (${remaining} remaining). On attempt ${max}, your exam will be <b>automatically sealed and submitted</b>.`;
+    }
+  }
+}
+
+export function hideForcedFullscreenModal() {
+  const modal = el('modal-fs-forced');
+  if (modal) modal.hidden = true;
+}
+
+export function paintFullscreenButton(isFs) {
+  const btn = el('btn-fs-toggle');
+  if (!btn) return;
+  btn.classList.toggle('is-fs', isFs);
+  const label = btn.querySelector('.fs-label');
+  if (label) label.textContent = isFs ? 'Exit Fullscreen' : 'Fullscreen';
+}
+
 /* --- 10 · SUBMISSION DOSSIER (NO ANSWERS STORED/REVEALED LOCALLY) ---------- */
 export function renderDossier(d) {
   setText('dos-name', d.candidate.name || 'Candidate');
@@ -469,20 +682,22 @@ export function renderDossier(d) {
   setText('dos-code', d.candidate.code || 'VERIFIED');
   setText('dos-school', d.candidate.school || '—');
   setText('dos-stamp', stampUTC(new Date(d.meta.generated)));
-  setText('dos-jf-id', d.jotform?.id || 'RECORDED_TO_JOTFORM');
+  setText('dos-jf-id', d.meta?.integrityHash ? d.meta.integrityHash.slice(0, 16).toUpperCase() : 'SEALED');
 
   const verdict = el('dos-verdict');
   if (verdict) {
     if (d.meta.verdict === 'DISQUALIFIED') {
-      verdict.textContent = `Submission Flagged & Transmitted to JotForm (Disqualified: ${d.meta.dqReason})`;
+      verdict.textContent = `Assessment Flagged & Sealed (Disqualified: ${d.meta.dqReason})`;
       verdict.className = 'verdict is-bad';
     } else {
-      verdict.textContent = 'Assessment Choices Successfully Recorded to JotForm';
+      verdict.textContent = 'Assessment Choices Successfully Recorded & Sealed';
       verdict.className = 'verdict';
     }
   }
 
+  const skipped = d.summary.skippedCount != null ? d.summary.skippedCount : (d.summary.totalItems - d.summary.answeredCount);
   setText('dos-answered', `${d.summary.answeredCount} / ${d.summary.totalItems}`);
+  setText('dos-skipped', `${skipped} / ${d.summary.totalItems}`);
   setText('dos-time', mmss(d.summary.timeConsumedSec));
   setText('dos-inc', String(d.proctoring.strikes + d.proctoring.objectViolations));
   setText('dos-verdict-tag', d.meta.verdict);
@@ -495,7 +710,7 @@ export function renderDossier(d) {
       const hasChoice = it.selectedText && it.selectedText.length;
       const choiceHtml = hasChoice
         ? esc(it.selectedText.join(', '))
-        : '<span style="color:var(--ink-4)">Unattempted</span>';
+        : '<span style="color:var(--crimson); font-weight:600;">Skipped / Unattempted</span>';
       return '<tr>'
         + `<td class="num"><b>${pad(it.n)}</b></td>`
         + `<td>${esc(it.moduleShort)}</td>`
@@ -540,4 +755,7 @@ export function bindRenderer() {
   bus.on(EV.LOUNGE_CLOCK, ({ remaining }) => paintLoungeClock(remaining));
   bus.on(EV.OBJECT_DETECTED, paintObjectDetection);
   bus.on(EV.SEALED, renderDossier);
+  bus.on(EV.REVIEW_DRAWER, paintReviewDrawerState);
+  bus.on(EV.FINAL_REVIEW, paintFinalReviewState);
+  bus.on(EV.FULLSCREEN, paintFullscreenButton);
 }

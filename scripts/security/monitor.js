@@ -62,7 +62,7 @@ function onFocusLost(kind) {
   S.blurCount += 1;
   view.paintFocusCounter();
 
-  registerStrike('FOCUS', `Portal focus breach — ${kind}`);
+  registerStrike(`Portal focus breach — ${kind} (Alt+Tab / Window switch)`);
   if (!S.locked) openFocusAlarm(kind);
 }
 
@@ -74,32 +74,104 @@ export function acknowledgeFocusAlarm() {
   logEvent('ok', 'FOCUS', 'Focus-breach alarm acknowledged by candidate');
 }
 
-/* --- 03 · FULLSCREEN TRACKING -------------------------------------------- */
+export async function toggleFullscreen() {
+  if (fullscreenElement()) {
+    exitFullscreen();
+    return false;
+  } else {
+    try {
+      await requestFullscreen();
+      return true;
+    } catch (err) {
+      console.warn('[Fullscreen] toggle failed:', err);
+      toast('Fullscreen Notice', 'Could not engage fullscreen. Please click anywhere or press F11.', 'warn', 4000);
+      return false;
+    }
+  }
+}
+
+let forcedTriggerAttached = false;
+
+function autoReenterFullscreen() {
+  if (fullscreenElement() || S.stage !== 'live' || S.locked) return;
+  requestFullscreen().catch(() => {});
+}
+
+export function attachForcedFullscreenAutoTrigger() {
+  if (forcedTriggerAttached) return;
+  forcedTriggerAttached = true;
+  window.addEventListener('click', autoReenterFullscreen, true);
+  window.addEventListener('keydown', autoReenterFullscreen, true);
+  window.addEventListener('pointerdown', autoReenterFullscreen, true);
+}
+
+export function detachForcedFullscreenAutoTrigger() {
+  if (!forcedTriggerAttached) return;
+  forcedTriggerAttached = false;
+  window.removeEventListener('click', autoReenterFullscreen, true);
+  window.removeEventListener('keydown', autoReenterFullscreen, true);
+  window.removeEventListener('pointerdown', autoReenterFullscreen, true);
+}
+
+/* --- 03 · FULLSCREEN TRACKING & ENFORCEMENT ------------------------------- */
 function onFullscreenChange() {
+  const isFs = !!fullscreenElement();
+  bus.emit(EV.FULLSCREEN, isFs);
+
   if (S.stage !== 'live' || S.locked) return;
 
-  if (fullscreenElement()) {
+  if (isFs) {
     logEvent('ok', 'DISPLAY', 'Fullscreen containment active');
+    view.showFullscreenPrompt(false);
+    view.hideForcedFullscreenModal();
+    detachForcedFullscreenAutoTrigger();
+
+    // Lock keyboard shortcuts if supported by browser (Chrome/Edge in Fullscreen)
+    if (navigator.keyboard && typeof navigator.keyboard.lock === 'function') {
+      try {
+        navigator.keyboard.lock(['Escape', 'Tab', 'AltLeft', 'AltRight', 'MetaLeft', 'MetaRight']);
+      } catch (_) {}
+    }
     return;
   }
 
+  // Fullscreen exited (via Esc, gesture, or OS switch)
   S.fsBreaches += 1;
-  logEvent('warn', 'DISPLAY', 'Fullscreen mode exited by candidate');
-  toast('Fullscreen Exited', 'Warning: You have exited fullscreen mode. You can continue your assessment, but display state changes are logged.', 'warn', 7000);
+  S.fsExitTries = (S.fsExitTries || 0) + 1;
+  const maxTries = S.maxFsExitTries || 3;
+
+  logEvent('crit', 'DISPLAY', `Fullscreen exited by candidate (Attempt ${S.fsExitTries} of ${maxTries})`);
+
+  if (S.fsExitTries >= maxTries) {
+    toast('Disqualified: Max Fullscreen Exits', 'Exceeded 3 fullscreen exit attempts. Assessment automatically submitted.', 'danger', 10000);
+    view.hideForcedFullscreenModal();
+    detachForcedFullscreenAutoTrigger();
+    import('../quiz/engine.js').then((eng) => {
+      eng.sealExam('MAX_FULLSCREEN_EXITS_EXCEEDED');
+    });
+    return;
+  }
+
+  // Show forced fullscreen modal and attach auto-reentry trigger
+  view.showForcedFullscreenModal(S.fsExitTries, maxTries);
+  attachForcedFullscreenAutoTrigger();
+  toast(`Fullscreen Exited (${S.fsExitTries}/${maxTries})`, 'Continuous fullscreen required. 3 exits will auto-submit.', 'danger', 6000);
 }
 
 export function beginRedock() {
-  // Graceful notification without forced screen capture
-  toast('Fullscreen Advisory', 'Fullscreen mode was exited. Press F11 or click to re-enter if required.', 'warn', 6000);
+  view.showFullscreenPrompt(true);
 }
 
 export function redock() {
   return requestFullscreen()
     .then(() => {
       logEvent('ok', 'DISPLAY', 'Fullscreen re-entered');
+      view.showFullscreenPrompt(false);
+      view.hideForcedFullscreenModal();
+      detachForcedFullscreenAutoTrigger();
     })
     .catch(() => {
-      toast('Fullscreen Notice', 'Could not switch to fullscreen. You may continue in windowed mode.', 'info');
+      toast('Fullscreen Notice', 'Could not switch to fullscreen. Click anywhere to re-enter.', 'info');
     });
 }
 

@@ -1,0 +1,51 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ──────────────────────────────────────────────────────────────────────────
+    // QUIZZITCH PRODUCTION FIRESTORE SECURITY RULES (Celeste 2026)
+    // Project: quizzitch-14998
+    // ──────────────────────────────────────────────────────────────────────────
+
+    // 1. Exam Control (Master Exam Start / Pause / Reset)
+    // Candidates read to detect when invigilator starts exam; only authenticated admin can update
+    match /exam_control/{docId} {
+      allow read: if true;
+      allow write: if request.auth != null;
+    }
+
+    // 2. Question Bank
+    // Candidates read pooled questions; only authenticated admin can seed or modify
+    match /quizzitch_questions/{questionId} {
+      allow read: if true;
+      allow write: if request.auth != null;
+    }
+
+    // 3. Active Students (Heartbeat Presence)
+    // Candidates post heartbeat telemetry during assessment; admin reads real-time status
+    match /active_students/{sessionId} {
+      allow read: if true;
+      allow create, update: if true;
+      allow delete: if request.auth != null;
+    }
+
+    // 4. Submissions Dossiers (CRITICAL ANTI-CHEATING PROTECTION)
+    // Candidates can ONLY CREATE their submission dossier (write-only for candidates)
+    // Candidates CANNOT read other candidates' submissions or answers
+    // Only authenticated invigilators can read, query, and export submissions
+    // Submissions are immutable once created (no update or delete by candidates)
+    match /submissions/{submissionId} {
+      allow create: if request.resource.data.submissionId == submissionId
+                    && request.resource.data.keys().hasAll(['submissionId', 'candidateName', 'teamId', 'items']);
+      allow read, list: if request.auth != null;
+      allow update, delete: if request.auth != null;
+    }
+
+    // 5. Registration Records
+    // Candidates read their team registration by ID; only admin can modify
+    match /registrations/{regId} {
+      allow read: if true;
+      allow write: if request.auth != null;
+    }
+  }
+}

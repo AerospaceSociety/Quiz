@@ -1,0 +1,1051 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Quizzitch Invigilation &amp; Admin Control Deck · Celeste 2026</title>
+  <meta name="robots" content="noindex, nofollow">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&family=Space+Grotesk:wght@600;700&display=swap" rel="stylesheet">
+  
+  <style>
+    /* ==========================================================================
+       ADMIN PORTAL STYLES (CelesteCon Dark Obsidian Theme)
+       ========================================================================== */
+    :root {
+      --bg: #0D0B0A;
+      --bg-surface: #171412;
+      --bg-surface-elevated: #221E1A;
+      --bg-subtle: #2C2621;
+      --border: rgba(232, 225, 206, 0.12);
+      --border-focus: #E8E1CE;
+      
+      --text: #F3EFE6;
+      --text-muted: #9E9789;
+      --text-dim: #6E685C;
+
+      --accent: #E8E1CE;
+      --crimson: #E0482B;
+      --crimson-dim: rgba(224, 72, 43, 0.16);
+      --emerald: #10B981;
+      --emerald-dim: rgba(16, 185, 129, 0.14);
+      --amber: #F59E0B;
+      --amber-dim: rgba(245, 158, 11, 0.14);
+      --cyan: #38BDF8;
+      --cyan-dim: rgba(56, 189, 248, 0.14);
+
+      --radius-sm: 6px;
+      --radius-md: 10px;
+      --radius-lg: 14px;
+      --radius-full: 9999px;
+
+      --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      --font-display: 'Space Grotesk', var(--font-sans);
+      --font-mono: 'JetBrains Mono', monospace;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    
+    body {
+      background-color: var(--bg);
+      color: var(--text);
+      font-family: var(--font-sans);
+      font-size: 14px;
+      line-height: 1.5;
+      min-height: 100vh;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    /* --- AUTH VIEW -------------------------------------------------------- */
+    .auth-container {
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+      background: radial-gradient(circle at 50% 20%, rgba(224, 72, 43, 0.08), transparent 70%), var(--bg);
+    }
+
+    .auth-card {
+      width: 100%;
+      max-width: 440px;
+      background: var(--bg-surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      padding: 36px 32px;
+      box-shadow: 0 20px 40px rgba(0, 0, 0, 0.6);
+    }
+
+    .auth-logo {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 24px;
+    }
+
+    .auth-logo-badge {
+      font-family: var(--font-display);
+      font-weight: 700;
+      font-size: 18px;
+      letter-spacing: -0.02em;
+      color: #FFF;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .auth-logo-badge span {
+      background: var(--crimson);
+      color: #FFF;
+      padding: 2px 8px;
+      border-radius: var(--radius-sm);
+      font-size: 11px;
+      letter-spacing: 0.08em;
+    }
+
+    .auth-title {
+      font-family: var(--font-display);
+      font-size: 22px;
+      font-weight: 700;
+      margin-bottom: 8px;
+      color: var(--text);
+    }
+
+    .auth-sub {
+      color: var(--text-muted);
+      font-size: 13px;
+      margin-bottom: 24px;
+      line-height: 1.4;
+    }
+
+    .form-group {
+      margin-bottom: 18px;
+    }
+
+    .form-label {
+      display: block;
+      font-size: 12px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--text-muted);
+      margin-bottom: 8px;
+    }
+
+    .form-input {
+      width: 100%;
+      padding: 12px 14px;
+      background: var(--bg-surface-elevated);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-md);
+      color: var(--text);
+      font-size: 14px;
+      font-family: inherit;
+      outline: none;
+      transition: border-color 0.15s, box-shadow 0.15s;
+    }
+
+    .form-input:focus {
+      border-color: var(--border-focus);
+      box-shadow: 0 0 0 2px rgba(232, 225, 206, 0.15);
+    }
+
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      padding: 12px 20px;
+      border-radius: var(--radius-md);
+      font-family: inherit;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      border: 1px solid transparent;
+      transition: all 0.15s ease;
+      text-decoration: none;
+    }
+
+    .btn--primary {
+      background: var(--text);
+      color: var(--bg);
+      border-color: var(--text);
+      width: 100%;
+    }
+
+    .btn--primary:hover {
+      background: #FFF;
+      transform: translateY(-1px);
+    }
+
+    .btn--secondary {
+      background: var(--bg-surface-elevated);
+      color: var(--text);
+      border-color: var(--border);
+      width: 100%;
+    }
+
+    .btn--secondary:hover {
+      background: var(--bg-subtle);
+      border-color: rgba(232, 225, 206, 0.25);
+    }
+
+    .btn--danger {
+      background: var(--crimson);
+      color: #FFF;
+      border-color: var(--crimson);
+    }
+
+    .btn--danger:hover {
+      background: #C4381C;
+    }
+
+    .btn--warning {
+      background: var(--amber);
+      color: #000;
+      border-color: var(--amber);
+    }
+
+    .btn--emerald {
+      background: var(--emerald);
+      color: #FFF;
+      border-color: var(--emerald);
+    }
+
+    .btn--sub {
+      background: transparent;
+      color: var(--text-muted);
+      border-color: var(--border);
+    }
+
+    .btn--sub:hover {
+      color: var(--text);
+      border-color: var(--border-focus);
+    }
+
+    .btn--sm {
+      padding: 6px 12px;
+      font-size: 12px;
+      border-radius: var(--radius-sm);
+    }
+
+    .btn--xs {
+      padding: 4px 8px;
+      font-size: 11px;
+      border-radius: var(--radius-sm);
+    }
+
+    .auth-error {
+      background: var(--crimson-dim);
+      border: 1px solid var(--crimson);
+      color: #FFA291;
+      padding: 12px;
+      border-radius: var(--radius-md);
+      font-size: 13px;
+      margin-bottom: 18px;
+    }
+
+    .auth-divider {
+      display: flex;
+      align-items: center;
+      text-align: center;
+      color: var(--text-dim);
+      font-size: 12px;
+      margin: 20px 0;
+    }
+
+    .auth-divider::before,
+    .auth-divider::after {
+      content: '';
+      flex: 1;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .auth-divider span {
+      padding: 0 10px;
+    }
+
+    /* --- DASHBOARD VIEW --------------------------------------------------- */
+    .dashboard-layout {
+      display: flex;
+      flex-direction: column;
+      min-height: 100vh;
+    }
+
+    .admin-header {
+      background: var(--bg-surface);
+      border-bottom: 1px solid var(--border);
+      padding: 16px 28px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      position: sticky;
+      top: 0;
+      z-index: 100;
+    }
+
+    .header-brand {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+    }
+
+    .header-title {
+      font-family: var(--font-display);
+      font-size: 18px;
+      font-weight: 700;
+      color: var(--text);
+    }
+
+    .header-badge {
+      background: var(--crimson);
+      color: #FFF;
+      font-size: 11px;
+      font-weight: 700;
+      padding: 3px 8px;
+      border-radius: var(--radius-sm);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    .header-actions {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+    }
+
+    .user-info {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      color: var(--text-muted);
+      font-size: 13px;
+    }
+
+    .admin-main {
+      padding: 28px;
+      max-width: 1400px;
+      margin: 0 auto;
+      width: 100%;
+      display: flex;
+      flex-direction: column;
+      gap: 28px;
+    }
+
+    /* --- METRICS GRID ----------------------------------------------------- */
+    .metrics-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+      gap: 18px;
+    }
+
+    .metric-card {
+      background: var(--bg-surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      padding: 20px 24px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .metric-k {
+      font-size: 12px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: var(--text-muted);
+    }
+
+    .metric-v {
+      font-family: var(--font-display);
+      font-size: 32px;
+      font-weight: 700;
+      color: var(--text);
+      line-height: 1.1;
+    }
+
+    .metric-sub {
+      font-size: 12px;
+      color: var(--text-dim);
+    }
+
+    /* --- MASTER EXAM CONTROL DECK ----------------------------------------- */
+    .control-deck {
+      background: var(--bg-surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      padding: 24px 28px;
+      display: flex;
+      flex-direction: column;
+      gap: 18px;
+    }
+
+    .control-deck-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 12px;
+    }
+
+    .control-deck-title {
+      font-family: var(--font-display);
+      font-size: 18px;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .control-actions {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+
+    .status-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 12px;
+      border-radius: var(--radius-full);
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: 0.05em;
+    }
+
+    .status-pill--waiting { background: var(--bg-subtle); color: var(--text-muted); }
+    .status-pill--active { background: var(--emerald-dim); color: var(--emerald); border: 1px solid var(--emerald); }
+    .status-pill--paused { background: var(--amber-dim); color: var(--amber); border: 1px solid var(--amber); }
+    .status-pill--ended { background: var(--crimson-dim); color: var(--crimson); border: 1px solid var(--crimson); }
+
+    .control-desc {
+      font-size: 13px;
+      color: var(--text-muted);
+      background: var(--bg-surface-elevated);
+      padding: 12px 16px;
+      border-radius: var(--radius-md);
+      border-left: 3px solid var(--border);
+    }
+
+    /* --- PANELS & TABLES -------------------------------------------------- */
+    .panel {
+      background: var(--bg-surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      overflow: hidden;
+    }
+
+    .panel-head {
+      padding: 18px 24px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 12px;
+    }
+
+    .panel-title {
+      font-family: var(--font-display);
+      font-size: 16px;
+      font-weight: 700;
+    }
+
+    .panel-toolbar {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+
+    .search-box {
+      background: var(--bg-surface-elevated);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-md);
+      padding: 8px 12px;
+      color: var(--text);
+      font-size: 13px;
+      font-family: inherit;
+      width: 220px;
+      outline: none;
+    }
+
+    .search-box:focus {
+      border-color: var(--border-focus);
+    }
+
+    .filter-pills {
+      display: flex;
+      align-items: center;
+      background: var(--bg-surface-elevated);
+      border-radius: var(--radius-md);
+      padding: 3px;
+      gap: 2px;
+    }
+
+    .filter-pill {
+      background: transparent;
+      border: none;
+      color: var(--text-muted);
+      font-size: 12px;
+      font-weight: 500;
+      padding: 6px 12px;
+      border-radius: var(--radius-sm);
+      cursor: pointer;
+      font-family: inherit;
+      transition: all 0.1s;
+    }
+
+    .filter-pill.is-active {
+      background: var(--bg-subtle);
+      color: var(--text);
+      font-weight: 600;
+    }
+
+    .table-wrap {
+      overflow-x: auto;
+      max-height: 480px;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      text-align: left;
+      font-size: 13px;
+    }
+
+    th {
+      background: var(--bg-surface-elevated);
+      padding: 12px 20px;
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--text-muted);
+      border-bottom: 1px solid var(--border);
+      position: sticky;
+      top: 0;
+      z-index: 10;
+    }
+
+    td {
+      padding: 14px 20px;
+      border-bottom: 1px solid var(--border);
+      color: var(--text);
+      vertical-align: middle;
+    }
+
+    tr:hover td {
+      background: rgba(255, 255, 255, 0.02);
+    }
+
+    .table-empty {
+      text-align: center;
+      padding: 40px 20px;
+      color: var(--text-dim);
+    }
+
+    .cand-cell {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .cand-name {
+      font-weight: 600;
+      color: var(--text);
+    }
+
+    .cand-sub {
+      font-size: 12px;
+      color: var(--text-muted);
+    }
+
+    .cand-team-code {
+      font-family: var(--font-mono);
+      font-size: 12px;
+      color: var(--cyan);
+    }
+
+    .school-cell {
+      max-width: 220px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      color: var(--text-muted);
+    }
+
+    .time-cell {
+      font-family: var(--font-mono);
+      font-size: 12px;
+      color: var(--text-dim);
+    }
+
+    .status-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      display: inline-block;
+      flex-shrink: 0;
+    }
+
+    .status-dot--online {
+      background: var(--emerald);
+      box-shadow: 0 0 8px var(--emerald);
+    }
+
+    .status-dot--offline {
+      background: var(--text-dim);
+    }
+
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      padding: 3px 8px;
+      border-radius: var(--radius-sm);
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+
+    .badge--accent { background: rgba(56, 189, 248, 0.15); color: var(--cyan); }
+    .badge--success { background: var(--emerald-dim); color: var(--emerald); }
+    .badge--danger { background: var(--crimson-dim); color: var(--crimson); }
+    .badge--sub { background: var(--bg-subtle); color: var(--text-muted); }
+
+    .strike-badge {
+      font-size: 12px;
+      font-family: var(--font-mono);
+      color: var(--text-muted);
+    }
+
+    .strike-badge.is-warn {
+      color: var(--crimson);
+      font-weight: 700;
+    }
+
+    /* --- DOSSIER MODAL ---------------------------------------------------- */
+    .modal-backdrop {
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.85);
+      backdrop-filter: blur(8px);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+      z-index: 1000;
+    }
+
+    .modal-card {
+      background: var(--bg-surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      width: 100%;
+      max-width: 800px;
+      max-height: 90vh;
+      display: flex;
+      flex-direction: column;
+      box-shadow: 0 24px 60px rgba(0, 0, 0, 0.8);
+      overflow: hidden;
+    }
+
+    .modal-head {
+      padding: 20px 24px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .modal-body {
+      padding: 24px;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+    }
+
+    .dossier-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 16px;
+      background: var(--bg-surface-elevated);
+      padding: 16px;
+      border-radius: var(--radius-md);
+      font-size: 13px;
+    }
+
+    .dossier-k {
+      color: var(--text-muted);
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    .dossier-v {
+      font-weight: 600;
+      color: var(--text);
+      margin-top: 2px;
+    }
+
+    /* --- TOASTS ----------------------------------------------------------- */
+    .toast-container {
+      position: fixed;
+      bottom: 24px;
+      right: 24px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      z-index: 2000;
+    }
+
+    .admin-toast {
+      background: var(--bg-surface-elevated);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-md);
+      padding: 12px 18px;
+      min-width: 280px;
+      box-shadow: 0 10px 25px rgba(0, 0, 0, 0.6);
+      animation: slideIn 0.2s ease-out;
+      transition: opacity 0.3s ease;
+    }
+
+    .admin-toast--success { border-left: 4px solid var(--emerald); }
+    .admin-toast--danger { border-left: 4px solid var(--crimson); }
+    .admin-toast--warning { border-left: 4px solid var(--amber); }
+    .admin-toast--info { border-left: 4px solid var(--cyan); }
+
+    .toast-title {
+      font-weight: 600;
+      font-size: 13px;
+      margin-bottom: 2px;
+    }
+
+    .toast-msg {
+      font-size: 12px;
+      color: var(--text-muted);
+    }
+
+    .fade-out {
+      opacity: 0;
+    }
+
+    @keyframes slideIn {
+      from { transform: translateX(20px); opacity: 0; }
+      to { transform: translateX(0); opacity: 1; }
+    }
+
+    .pulse {
+      animation: pulseAnim 2s infinite;
+    }
+
+    @keyframes pulseAnim {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.7; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- ══════════════════════════════════════════════════════════════════════
+     01 · FIREBASE AUTHENTICATION VIEW (LOGIN SCREEN)
+     ══════════════════════════════════════════════════════════════════ -->
+  <div class="auth-container" id="auth-view">
+    <div class="auth-card">
+      <div class="auth-logo">
+        <div class="auth-logo-badge">
+          QUIZZITCH <span>INVIGILATOR</span>
+        </div>
+      </div>
+
+      <h1 class="auth-title">Admin Sign In</h1>
+      <p class="auth-sub">
+        Secure invigilation deck for Celeste 2026. Control test launch, monitor active candidates, and view real-time submissions.
+      </p>
+
+      <div class="auth-error" id="auth-error" hidden></div>
+
+      <form id="form-admin-login">
+        <div class="form-group">
+          <label class="form-label" for="input-admin-email">Admin Email</label>
+          <input class="form-input" id="input-admin-email" type="email" placeholder="admin@celestecon.org" required autocomplete="email">
+        </div>
+
+        <div class="form-group">
+          <label class="form-label" for="input-admin-password">Password</label>
+          <input class="form-input" id="input-admin-password" type="password" placeholder="••••••••••••" required autocomplete="current-password">
+        </div>
+
+        <button class="btn btn--primary" id="btn-admin-submit" type="submit">
+          Sign In as Invigilator
+        </button>
+      </form>
+
+      <div class="auth-divider">
+        <span>OR QUICK ACCESS</span>
+      </div>
+
+      <button class="btn btn--secondary" id="btn-quick-admin" type="button" title="Sign in without email credentials if testing or anonymous auth is configured">
+        ⚡ Quick Invigilator Access (Anonymous)
+      </button>
+    </div>
+  </div>
+
+
+  <!-- ══════════════════════════════════════════════════════════════════════
+     02 · AUTHENTICATED INVIGILATION DASHBOARD VIEW
+     ══════════════════════════════════════════════════════════════════ -->
+  <div class="dashboard-layout" id="dashboard-view" hidden>
+
+    <!-- Top Navigation Bar -->
+    <header class="admin-header">
+      <div class="header-brand">
+        <div class="header-title">QUIZZITCH DECK</div>
+        <span class="header-badge">Celeste 2026</span>
+        <span class="status-pill status-pill--active pulse">● LIVE INVIGILATION</span>
+      </div>
+
+      <div class="header-actions">
+        <div class="user-info">
+          <span>Logged in as:</span>
+          <b id="admin-user-email">Admin</b>
+        </div>
+        <button class="btn btn--sub btn--sm" id="btn-admin-signout" type="button">
+          Sign Out
+        </button>
+      </div>
+    </header>
+
+    <!-- Main Content Area -->
+    <main class="admin-main">
+
+      <!-- Metrics Row -->
+      <section class="metrics-grid">
+        <div class="metric-card">
+          <span class="metric-k">Global Exam State</span>
+          <div class="metric-v">
+            <span class="status-pill status-pill--waiting" id="exam-status-badge">WAITING</span>
+          </div>
+          <span class="metric-sub" id="metric-exam-sub">Controlled by Invigilation</span>
+        </div>
+
+        <div class="metric-card">
+          <span class="metric-k">Students Online</span>
+          <div class="metric-v" id="metric-students-online">0</div>
+          <span class="metric-sub" id="metric-students-total">0 registered sessions</span>
+        </div>
+
+        <div class="metric-card">
+          <span class="metric-k">Live Submissions</span>
+          <div class="metric-v" id="metric-submissions-total">0</div>
+          <span class="metric-sub" id="metric-flagged-total">0 flagged</span>
+        </div>
+
+        <div class="metric-card">
+          <span class="metric-k">Cloud Questions</span>
+          <div class="metric-v" style="font-size:24px; padding-top:6px;">
+            <button class="btn btn--secondary btn--sm" id="btn-seed-questions" type="button">
+              ⚡ Seed Questions
+            </button>
+          </div>
+          <span class="metric-sub">Sync 20 questions to Firestore</span>
+        </div>
+      </section>
+
+      <!-- Master Exam Controller -->
+      <section class="control-deck">
+        <div class="control-deck-header">
+          <div class="control-deck-title">
+            <span>Master Exam Control</span>
+          </div>
+
+          <div class="control-actions">
+            <button class="btn btn--emerald" id="btn-exam-start" type="button">
+              🚀 START / RELEASE TEST FOR ALL
+            </button>
+            <button class="btn btn--warning" id="btn-exam-pause" type="button">
+              ⏸️ PAUSE TEST
+            </button>
+            <button class="btn btn--danger" id="btn-exam-end" type="button">
+              ⏹️ CONCLUDE &amp; SEAL
+            </button>
+            <button class="btn btn--sub btn--sm" id="btn-exam-reset" type="button" title="Reset exam status to WAITING">
+              🔄 Reset to Lounge
+            </button>
+          </div>
+        </div>
+
+        <div class="control-desc" id="exam-status-desc">
+          ⚪ <b>WAITING LOUNGE ACTIVE</b> · Students are in pre-flight or waiting lounge. Click "START TEST FOR ALL" to release assessment.
+        </div>
+      </section>
+
+      <!-- Active Students Monitor -->
+      <section class="panel">
+        <div class="panel-head">
+          <div class="panel-title">Active Students Monitor</div>
+
+          <div class="panel-toolbar">
+            <input class="search-box" id="student-search" type="search" placeholder="Search name, school, team…">
+
+            <div class="filter-pills">
+              <button class="filter-pill btn-filter-student is-active" data-filter="all" type="button">All</button>
+              <button class="filter-pill btn-filter-student" data-filter="online" type="button">Online</button>
+              <button class="filter-pill btn-filter-student" data-filter="lounge" type="button">Lounge</button>
+              <button class="filter-pill btn-filter-student" data-filter="live" type="button">Taking Exam</button>
+              <button class="filter-pill btn-filter-student" data-filter="sealed" type="button">Submitted</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Candidate</th>
+                <th>Team ID</th>
+                <th>School</th>
+                <th>Stage</th>
+                <th>Progress</th>
+                <th>Integrity</th>
+                <th>Last Ping</th>
+              </tr>
+            </thead>
+            <tbody id="tbody-students">
+              <tr>
+                <td colspan="7" class="table-empty">Connecting to real-time presence stream…</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- Submissions Monitor -->
+      <section class="panel">
+        <div class="panel-head">
+          <div class="panel-title">Submissions Received</div>
+
+          <div class="panel-toolbar">
+            <input class="search-box" id="submission-search" type="search" placeholder="Search submissions…">
+
+            <div class="filter-pills">
+              <button class="filter-pill btn-filter-sub is-active" data-filter="all" type="button">All</button>
+              <button class="filter-pill btn-filter-sub" data-filter="accepted" type="button">Accepted</button>
+              <button class="filter-pill btn-filter-sub" data-filter="flagged" type="button">Flagged</button>
+            </div>
+
+            <button class="btn btn--sub btn--sm" id="btn-export-csv" type="button">
+              📥 Export CSV (Excel)
+            </button>
+            <button class="btn btn--sub btn--sm" id="btn-export-submissions-json" type="button">
+              Export JSON
+            </button>
+          </div>
+        </div>
+
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Submitted At</th>
+                <th>Candidate</th>
+                <th>School</th>
+                <th>Items Answered</th>
+                <th>Verdict</th>
+                <th>Reason</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody id="tbody-submissions">
+              <tr>
+                <td colspan="7" class="table-empty">Waiting for candidate submissions…</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+    </main>
+  </div>
+
+
+  <!-- ══════════════════════════════════════════════════════════════════════
+     03 · DOSSIER INSPECTOR MODAL
+     ══════════════════════════════════════════════════════════════════ -->
+  <div class="modal-backdrop" id="modal-inspect-dossier" hidden>
+    <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="dossier-cand-name">
+      <div class="modal-head">
+        <div>
+          <h2 class="auth-title" style="font-size:18px; margin:0;" id="dossier-cand-name">Candidate Name</h2>
+          <div class="cand-sub" id="dossier-cand-team">Team ID · School</div>
+        </div>
+        <button class="btn btn--sub btn--sm" id="btn-close-dossier" type="button">✕ Close</button>
+      </div>
+
+      <div class="modal-body">
+        <div class="dossier-grid">
+          <div>
+            <div class="dossier-k">Submitted Time</div>
+            <div class="dossier-v" id="dossier-time">—</div>
+          </div>
+          <div>
+            <div class="dossier-k">Verdict</div>
+            <div class="dossier-v" id="dossier-verdict">—</div>
+          </div>
+          <div>
+            <div class="dossier-k">Submit Reason</div>
+            <div class="dossier-v" id="dossier-reason">—</div>
+          </div>
+          <div>
+            <div class="dossier-k">Answered</div>
+            <div class="dossier-v" id="dossier-answered">—</div>
+          </div>
+          <div>
+            <div class="dossier-k">Time Consumed</div>
+            <div class="dossier-v" id="dossier-duration">—</div>
+          </div>
+          <div>
+            <div class="dossier-k">Integrity Hash</div>
+            <div class="dossier-v" style="font-family:var(--font-mono); font-size:11px;" id="dossier-hash">—</div>
+          </div>
+        </div>
+
+        <h3 style="font-size:14px; font-weight:600; text-transform:uppercase; letter-spacing:0.05em; color:var(--text-muted); margin-top:8px;">
+          Question Responses Breakdown
+        </h3>
+
+        <div class="table-wrap" style="max-height:260px;">
+          <table>
+            <thead>
+              <tr>
+                <th>#</th>
+                <th>Module</th>
+                <th>Selected Option(s)</th>
+                <th>Time Spent</th>
+              </tr>
+            </thead>
+            <tbody id="dossier-items-body">
+              <tr>
+                <td colspan="4" class="table-empty">Loading items…</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+
+
+  <!-- Toast Notifications Container -->
+  <div class="toast-container" id="toast-container"></div>
+
+  <!-- Main Admin Module Script -->
+  <script type="module" src="scripts/admin/admin.js"></script>
+</body>
+</html>

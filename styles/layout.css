@@ -127,6 +127,7 @@
 }
 .hud__clock-val {
   font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
   font-size: 15px;
   font-weight: 700;
   color: var(--crimson);
@@ -297,6 +298,7 @@
 }
 .lounge__timer-clock {
   font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
   font-size: clamp(48px, 8vw, 68px);
   font-weight: 700;
   color: var(--crimson);
@@ -452,16 +454,33 @@
   background: var(--ink);
   color: var(--bone-hi);
   font-weight: 700;
+  box-shadow: 0 0 0 2px var(--ink);
+  transform: scale(1.04);
+  z-index: 2;
 }
 .matrix-cell.is-answered {
-  background: var(--surface-3);
-  border-color: var(--success);
-  color: var(--success);
+  background: rgba(16, 185, 129, .22);
+  border-color: #10B981;
+  color: #047857;
+  font-weight: 700;
 }
 .matrix-cell.is-answered.is-current {
-  background: var(--success);
+  background: #10B981;
   color: #fff;
-  border-color: var(--success);
+  border-color: #059669;
+  box-shadow: 0 0 0 2px var(--ink);
+}
+.matrix-cell.is-skipped {
+  background: rgba(225, 29, 72, .18);
+  border-color: #E11D48;
+  color: #BE123C;
+  font-weight: 700;
+}
+.matrix-cell.is-skipped.is-current {
+  background: #E11D48;
+  color: #fff;
+  border-color: #9F1239;
+  box-shadow: 0 0 0 2px var(--ink);
 }
 .matrix-cell.is-flagged {
   border-color: var(--warning);
@@ -503,7 +522,8 @@
   background: var(--surface-input);
   border: 1px solid var(--border);
 }
-.legend i.is-answered { background: var(--surface-3); border-color: var(--success); }
+.legend i.is-answered { background: #10B981; border-color: #10B981; }
+.legend i.is-skipped  { background: #E11D48; border-color: #E11D48; }
 .legend i.is-flagged  { background: var(--surface-3); border-color: var(--warning); }
 .legend i.is-current  { background: var(--ink); border-color: var(--ink); }
 
@@ -702,4 +722,13 @@
   font-weight: 400;
   color: var(--ink-3);
   margin-left: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }

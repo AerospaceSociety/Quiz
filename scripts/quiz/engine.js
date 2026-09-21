@@ -6,7 +6,7 @@
 import {
   CFG, S, bus, EV,
   scheme, moduleOf, hash32,
-  logEvent, toast, commitDwell, answeredCount, flaggedCount, setStage
+  logEvent, toast, commitDwell, answeredCount, skippedCount, unattemptedCount, flaggedCount, setStage
 } from '../core/state.js';
 
 import { createCountdown, mmss, wallTime } from '../utils/timer.js';
@@ -20,21 +20,39 @@ let loungeTimerHandle = null;
 
 export const getDossier = () => dossier;
 
+// Auto-submit on security lockout (e.g. 3 focus breaches or 3 strikes)
+bus.on(EV.LOCKOUT, ({ trigger }) => {
+  sealExam(trigger || 'SECURITY_LOCKOUT');
+});
+
 /* --- 01 · NAVIGATION ------------------------------------------------------ */
 export function go(index) {
   if (S.locked || S.stage !== 'live') return;
   if (index < 0 || index >= CFG.questions.length) return;
 
   commitDwell();
+
+  // If departing previous question, mark whether it was answered or skipped
+  if (S.responses[S.idx]) {
+    S.responses[S.idx].visited = true;
+    if (!S.responses[S.idx].sel || S.responses[S.idx].sel.length === 0) {
+      S.responses[S.idx].skipped = true;
+    } else {
+      S.responses[S.idx].skipped = false;
+    }
+  }
+
   S.idx = index;
   S.activeModule = CFG.questions[index].catId;
   if (S.responses[index]) {
     S.responses[index].visits += 1;
+    S.responses[index].visited = true;
   }
   S.qEnterTs = performance.now();
 
   bus.emit(EV.QUESTION, index);
   bus.emit(EV.MATRIX);
+  bus.emit(EV.PROGRESS);
 }
 
 export const next = () => go((S.idx + 1) % CFG.questions.length);
@@ -70,6 +88,8 @@ export function pick(optionIndex) {
   }
 
   r.selectedTexts = r.sel.map((i) => q.options[i]);
+  r.visited = true;
+  r.skipped = r.sel.length === 0;
 
   bus.emit(EV.QUESTION, S.idx);
   bus.emit(EV.MATRIX);
@@ -81,6 +101,7 @@ export function clearResponse() {
   if (!S.responses[S.idx]) return;
   S.responses[S.idx].sel = [];
   S.responses[S.idx].selectedTexts = [];
+  S.responses[S.idx].skipped = true;
   logEvent('info', 'RESPONSE', `Response cleared on question ${S.idx + 1}`);
   bus.emit(EV.QUESTION, S.idx);
   bus.emit(EV.MATRIX);
@@ -96,6 +117,42 @@ export function toggleFlag() {
   bus.emit(EV.QUESTION, S.idx);
   bus.emit(EV.MATRIX);
   bus.emit(EV.PROGRESS);
+}
+
+/* --- 02.5 · REVIEW DRAWER & PRE-SUBMIT MODAL ------------------------------ */
+export function openReviewDrawer() {
+  if (S.stage !== 'live') return;
+  commitDwell();
+  S.reviewDrawerOpen = true;
+  bus.emit(EV.REVIEW_DRAWER, true);
+}
+
+export function closeReviewDrawer() {
+  S.reviewDrawerOpen = false;
+  bus.emit(EV.REVIEW_DRAWER, false);
+}
+
+export function toggleReviewDrawer() {
+  if (S.reviewDrawerOpen) closeReviewDrawer();
+  else openReviewDrawer();
+}
+
+export function openFinalReview() {
+  if (S.stage !== 'live') return;
+  commitDwell();
+  // Ensure any question without selection is formally marked skipped
+  S.responses.forEach((r, i) => {
+    if (!r.sel || r.sel.length === 0) {
+      r.skipped = true;
+    }
+  });
+  S.finalReviewOpen = true;
+  bus.emit(EV.FINAL_REVIEW, true);
+}
+
+export function closeFinalReview() {
+  S.finalReviewOpen = false;
+  bus.emit(EV.FINAL_REVIEW, false);
 }
 
 /* --- 03 · WAITING ROOM LOUNGE TIMER --------------------------------------- */
@@ -132,17 +189,20 @@ export function startClock() {
   S.clock = createCountdown({
     durationSeconds: exam.durationSeconds || 2700,
     tickMs: exam.clockTickMs || 250,
-    onTick({ remaining, elapsed }) {
+    warnAt: exam.warnAtSeconds || 600,
+    critAt: exam.criticalAtSeconds || 300,
+    onTick(remaining, elapsed) {
       S.remaining = remaining;
       bus.emit(EV.CLOCK, { remaining, elapsed });
     },
-    onWarn(sec) {
-      toast('Time Advisory', `${Math.round(sec / 60)} minutes remaining on synchronized clock.`, 'warn', 6000);
+    onThreshold(level) {
+      if (level === 'crit') {
+        toast('Final Window', '5 minutes remaining. Questions auto-submit at 00:00.', 'danger', 8000);
+      } else {
+        toast('Time Advisory', '10 minutes remaining on synchronized clock.', 'warn', 6000);
+      }
     },
-    onCritical(sec) {
-      toast('Final Window', `${Math.round(sec / 60)} minutes remaining. Questions auto-submit at 00:00.`, 'danger', 8000);
-    },
-    onExpiry() {
+    onExpire() {
       logEvent('warn', 'CLOCK', 'Synchronized assessment window expired');
       sealExam('TIME_EXPIRY');
     }
@@ -163,25 +223,40 @@ export async function sealExam(reason = 'CANDIDATE_SUBMIT') {
   releaseStream();
 
   S.submitReason = reason;
-  if (!S.locked && reason === 'CANDIDATE_SUBMIT') S.verdict = 'ACCEPTED';
+  if (reason === 'MAX_FULLSCREEN_EXITS_EXCEEDED') {
+    S.locked = true;
+    S.verdict = 'DISQUALIFIED';
+    S.dqReason = 'Maximum fullscreen exits exceeded (3/3)';
+  } else if (!S.locked) {
+    if (S.strikes > 0 || S.blurCount > 0) {
+      S.verdict = 'FLAGGED';
+    } else {
+      S.verdict = 'ACCEPTED';
+    }
+  }
   setStage('sealed');
 
   dossier = buildDossier();
   bus.emit(EV.SEALED, dossier);
 
-  /* Transmit choices and dossier directly to JotForm */
-  toast('Submitting Responses', 'Transmitting assessment choices to JotForm…', 'accent', 4000);
+  toast('Recording Responses', 'Saving assessment choices directly to Firebase…', 'accent', 4000);
+
+  /* Save directly to Firebase Firestore */
+  try {
+    const { saveSubmissionToFirestore } = await import('../utils/firebase.js');
+    await saveSubmissionToFirestore(dossier);
+    toast('Assessment Sealed', 'Your responses have been recorded in the database.', 'ok', 6500);
+  } catch (err) {
+    console.warn('[Firebase] Direct save notice:', err.message);
+  }
+
+  /* Background sync */
   try {
     const jfRes = await submitAssessmentToJotForm(dossier);
     S.jotformSubmission = jfRes;
-    toast('Recorded to JotForm', 'Your assessment responses have been recorded.', 'ok', 6000);
-    view.setText('dos-jf-id', jfRes.id || 'RECORDED');
-  } catch (err) {
-    console.error('[JotForm] Submission error:', err);
-    toast('JotForm Dispatched', 'Submission stored in session dossier.', 'info', 5000);
-  }
+  } catch (_) {}
 
-  logEvent('ok', 'SEAL', `Assessment sealed (${reason}) · Transmission complete`);
+  logEvent('ok', 'SEAL', `Assessment sealed (${reason}) · Recorded to Firebase`);
   try { exitFullscreen(); } catch (_) { /* browser policy */ }
 
   return dossier;
@@ -193,6 +268,10 @@ function buildDossier() {
 
   const items = CFG.questions.map((q, i) => {
     const r = S.responses[i] || { sel: [], selectedTexts: [], flagged: false, visits: 0, timeMs: 0 };
+    const origSel = (q.origOptionIndices && r.sel)
+      ? r.sel.map((idx) => q.origOptionIndices[idx]).filter((idx) => idx != null)
+      : r.sel;
+
     return {
       n: i + 1,
       questionId: q.id,
@@ -200,6 +279,7 @@ function buildDossier() {
       moduleShort: moduleOf(q.catId).short,
       questionText: q.question,
       selectedIndices: r.sel,
+      selectedOriginalIndices: origSel,
       selectedText: r.selectedTexts || [],
       flagged: r.flagged,
       visits: r.visits,
@@ -222,6 +302,7 @@ function buildDossier() {
     summary: {
       totalItems: CFG.questions.length,
       answeredCount: answeredCount(),
+      skippedCount: unattemptedCount(),
       flaggedCount: flaggedCount(),
       timeConsumedSec: timeConsumed,
       durationSec: duration
