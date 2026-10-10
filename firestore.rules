@@ -1,0 +1,122 @@
+rules_version = '2';
+
+// ============================================================================
+// QUIZZITCH · CelesteCon 2026 · Firestore security rules (project quizzitch-14998)
+//
+// Principals
+//   candidate — Firebase anonymous auth; may only touch documents keyed by its own uid.
+//   admin     — email/password account whose uid has a document in /admins.
+//               Create those documents by hand in the Firebase console; no client can.
+//
+// Deploy:  firebase deploy --only firestore:rules
+// ============================================================================
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function signedIn() { return request.auth != null; }
+    function isSelf(uid) { return signedIn() && request.auth.uid == uid; }
+    function isAdmin() {
+      return signedIn() && exists(/databases/$(database)/documents/admins/$(request.auth.uid));
+    }
+    function released() {
+      return get(/databases/$(database)/documents/exam_control/status).data.status == 'active';
+    }
+    function sealed(uid) {
+      return exists(/databases/$(database)/documents/submissions/$(uid));
+    }
+    function incoming() { return request.resource.data; }
+
+    // ── Invigilator allowlist ────────────────────────────────────────────────
+    match /admins/{uid} {
+      allow get: if isSelf(uid);
+      allow list, write: if false;
+    }
+
+    // ── Paper release / end / extension ──────────────────────────────────────
+    match /exam_control/{doc} {
+      allow read: if signedIn();
+      allow write: if isAdmin();
+    }
+
+    // ── Question bank: unreadable until the invigilator releases the paper ──
+    match /quizzitch_questions/{id} {
+      allow read: if isAdmin() || (signedIn() && released());
+      allow write: if isAdmin();
+    }
+
+    // ── Answer key: invigilators only, never candidates ──────────────────────
+    match /answer_key/{doc} {
+      allow read, write: if isAdmin();
+    }
+
+    // ── Registration rosters: a candidate may fetch one school by exact id ───
+    match /registrations/{schoolUid} {
+      allow get: if signedIn();
+      allow list, write: if isAdmin();
+    }
+
+    // ── Identity locks: one live device per candidate, no second sitting ────
+    match /identities/{key} {
+      allow get: if signedIn();
+      allow list, delete: if isAdmin();
+      allow create: if signedIn()
+        && incoming().uid == request.auth.uid
+        && incoming().state == 'active';
+      allow update: if isAdmin()
+        || (signedIn()
+            && resource.data.uid == request.auth.uid
+            && resource.data.state != 'sealed'
+            && incoming().uid == request.auth.uid
+            && incoming().state in ['active', 'sealed']);
+    }
+
+    // ── Clock handshake scratch document ─────────────────────────────────────
+    match /time_sync/{uid} {
+      allow read, write: if isSelf(uid);
+    }
+
+    // ── Live session state (heartbeat) ───────────────────────────────────────
+    // Strikes can only go up for the same identity, and a submitted session is frozen.
+    match /sessions/{uid} {
+      allow read: if isSelf(uid) || isAdmin();
+      allow create: if isSelf(uid) && incoming().uid == uid;
+      allow update: if isSelf(uid)
+        && incoming().uid == uid
+        && resource.data.get('status', '') != 'submitted'
+        && (incoming().get('identityKey', '') != resource.data.get('identityKey', '')
+            || incoming().get('strikes', 0) >= resource.data.get('strikes', 0));
+      allow delete: if isAdmin();
+    }
+
+    // ── Live activity feed ───────────────────────────────────────────────────
+    match /events/{id} {
+      allow create: if signedIn()
+        && incoming().uid == request.auth.uid
+        && incoming().level in [0, 1, 2]
+        && incoming().message is string && incoming().message.size() < 500
+        && (!('thumb' in incoming()) || (incoming().thumb is string && incoming().thumb.size() < 40000));
+      allow read, delete: if isAdmin();
+      allow update: if false;
+    }
+
+    // ── Forensic record: baseline, stills, full ledger ───────────────────────
+    // Writable by its owner only until the submission exists (the sealing batch
+    // is evaluated against the pre-batch state, so it may still write here).
+    match /forensics/{uid} {
+      allow create, update: if isSelf(uid) && !sealed(uid);
+      allow read, delete: if isAdmin();
+    }
+
+    // ── Sealed submissions: create-once, immutable, invigilator-readable ─────
+    match /submissions/{uid} {
+      allow create: if isSelf(uid)
+        && incoming().uid == uid
+        && incoming().keys().hasAll(['sessionId', 'candidate', 'items', 'checksum', 'salt', 'sealedAt'])
+        && incoming().items is list && incoming().items.size() <= 200
+        && incoming().checksum is string && incoming().checksum.size() == 64;
+      allow read, delete: if isAdmin();
+      allow update: if false;
+    }
+  }
+}

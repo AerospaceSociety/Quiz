@@ -1,0 +1,185 @@
+{
+  "meta": {
+    "portal": "QUIZZITCH",
+    "event": "CelesteCon 2026",
+    "edition": "6th Edition",
+    "round": "Preliminary Screening",
+    "organiser": "AEROSS \u2014 The Aerospace Society, Delhi Public School R.K. Puram",
+    "paperId": "CC26-PRELIM-01",
+    "build": "2026.09.28",
+    "contact": "aeross@dpsrkp.net"
+  },
+  "exam": {
+    "durationSeconds": 2700,
+    "warnAtSeconds": 600,
+    "criticalAtSeconds": 300,
+    "itemsPerModule": 5,
+    "shuffleQuestions": true,
+    "shuffleOptions": true,
+    "questionSource": "firestore",
+    "requireRelease": true
+  },
+  "timer": {
+    "syncSamples": 3,
+    "resyncSeconds": 300,
+    "anomalyThresholdMs": 5000,
+    "anomalyAction": "submit"
+  },
+  "security": {
+    "maxStrikes": 3,
+    "advisoriesPerStrike": 3,
+    "fullscreenGraceSeconds": 10,
+    "focusDedupeMs": 1500,
+    "requireFullscreen": true,
+    "devtoolsTripwire": true,
+    "devtoolsTripwireMs": 800,
+    "devtoolsResizeThreshold": 160,
+    "warnOnUnload": true
+  },
+  "proctoring": {
+    "enabled": true,
+    "allowDegradedMode": false,
+    "inferenceIntervalMs": 400,
+    "frameWidth": 320,
+    "frameHeight": 240,
+    "delegate": "CPU",
+    "visionBundleUrl": "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/vision_bundle.mjs",
+    "wasmBaseUrl": "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/wasm",
+    "modelUrl": "https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task",
+    "absenceSeconds": 3,
+    "multiFaceSeconds": 1.5,
+    "yawLimitDeg": 30,
+    "pitchDownLimitDeg": 20,
+    "gazeSustainSeconds": 3,
+    "freezeSeconds": 5,
+    "freezeDiffEpsilon": 0.12,
+    "lumaMin": 45,
+    "lumaMax": 215,
+    "contrastMin": 14,
+    "micMinLevel": 0.02,
+    "audioSpikeFactor": 6,
+    "audioSpikeFloor": 0.08,
+    "audioSustainSeconds": 2,
+    "flagCooldownSeconds": 20,
+    "incidentThumbs": 12,
+    "virtualCameraPattern": "obs|virtual|manycam|snap camera|xsplit|droidcam|epoccam|ndi|camtwist|vcam|iriun"
+  },
+  "telemetry": {
+    "heartbeatSeconds": 30,
+    "advisoryRateLimitSeconds": 60
+  },
+  "schemes": {
+    "standard": {
+      "label": "Single Choice",
+      "correct": 5,
+      "incorrect": -1,
+      "multi": false,
+      "note": "Select exactly one option."
+    },
+    "highstakes": {
+      "label": "Reasoning",
+      "correct": 5,
+      "incorrect": -1,
+      "multi": false,
+      "note": "Reasoning item \u2014 select exactly one option. Negative marking applies."
+    },
+    "multi": {
+      "label": "Multi-Select",
+      "correct": 5,
+      "incorrect": 0,
+      "multi": true,
+      "note": "Select every correct option. Full marks only for an exact match; no negative marking."
+    }
+  },
+  "modules": [
+    {
+      "id": 0,
+      "letter": "A",
+      "code": "M-A",
+      "short": "Orbital",
+      "name": "Orbital Mechanics & Astrodynamics"
+    },
+    {
+      "id": 1,
+      "letter": "B",
+      "code": "M-B",
+      "short": "Habitat",
+      "name": "Space Settlement & Habitat Engineering"
+    },
+    {
+      "id": 2,
+      "letter": "C",
+      "code": "M-C",
+      "short": "Propulsion",
+      "name": "UAV, CFD & Supersonic Propulsion"
+    },
+    {
+      "id": 3,
+      "letter": "D",
+      "code": "M-D",
+      "short": "Deep Space",
+      "name": "Deep Space Exploration & Astrophysics"
+    }
+  ],
+  "divisions": [
+    {
+      "code": "IPD",
+      "aliases": [
+        "IPOD",
+        "DISP",
+        "DEBATE",
+        "IPD"
+      ],
+      "name": "In-Pursuit Of Dispute",
+      "teamSize": 1,
+      "seedTop": 16
+    },
+    {
+      "code": "THT",
+      "aliases": [
+        "THEATRE",
+        "THT"
+      ],
+      "name": "AEROSS Theatre",
+      "teamSize": 0,
+      "seedTop": 0
+    }
+  ],
+  "registry": {
+    "schoolUidPattern": "^(?:C26-[A-Z]{2}-\\d{4}|(?:CLT-2026-)?(SCH|IND)-\\d{4,8})$",
+    "schoolUidExample": "C26-AB-0101",
+    "teamIdPattern": "^(?:C26-[A-Z]{2}-\\d{4}-(?:SMT|VOL|DISP|IPOD|IPD|BPP|ATH|THT|THEATRE|CJAM|ROC|RCKT|APRIX|F1|PRIX)(?:-(?:SR|JR|T\\d{1,2}))?(?:-M\\d{1,2})?|(?:(?:CLT-2026-)?(?:SCH|IND)-\\d{4,8}-)?(?:DISP|IPD|THEATRE|THT|IPOD)-T\\d{1,2}(?:-\\d{1,4})?(?:-M\\d{1,2})?)$",
+    "teamIdExample": "C26-AB-0101-IPOD",
+    "minNameLength": 3,
+    "rosterCheck": "advisory"
+  },
+  "firebase": {
+    "enabled": true,
+    "apiKey": "FIREBASE_API_KEY_PLACEHOLDER",
+    "authDomain": "quizzitch-14998.firebaseapp.com",
+    "projectId": "quizzitch-14998",
+    "storageBucket": "quizzitch-14998.firebasestorage.app",
+    "messagingSenderId": "FIREBASE_MESSAGING_SENDER_ID_PLACEHOLDER",
+    "appId": "FIREBASE_APP_ID_PLACEHOLDER",
+    "questionsCollection": "quizzitch_questions",
+    "measurementId": "FIREBASE_MEASUREMENT_ID_PLACEHOLDER"
+  },
+  "jotform": {
+    "enabled": true,
+    "formId": "262450769915063",
+    "submitUrl": "https://submit.jotform.com/submit/",
+    "webhookUrl": "",
+    "fieldMap": {
+      "schoolUid": "q12_schoolUid",
+      "teamId": "q13_teamId",
+      "candidateName": "q14_candidateName",
+      "division": "q15_division",
+      "sessionId": "q16_sessionId",
+      "answered": "q17_answered",
+      "verdict": "q18_verdict",
+      "checksum": "q19_checksum",
+      "responsesJson": "q20_responsesJson",
+      "summaryText": "q21_summaryText"
+    }
+  }
+}

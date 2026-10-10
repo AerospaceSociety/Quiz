@@ -1,0 +1,390 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="color-scheme" content="dark">
+  <meta name="robots" content="noindex, nofollow">
+  <meta name="referrer" content="no-referrer">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://cdn.jsdelivr.net https://www.gstatic.com 'wasm-unsafe-eval'; worker-src 'self' blob:; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdn.jsdelivr.net; font-src 'self' https://fonts.gstatic.com https://cdn.jsdelivr.net; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self' https://firestore.googleapis.com https://identitytoolkit.googleapis.com https://securetoken.googleapis.com https://www.googleapis.com https://cdn.jsdelivr.net https://storage.googleapis.com https://submit.jotform.com https://api.jotform.com; object-src 'none'; base-uri 'self'; form-action 'self' https://submit.jotform.com">
+  <meta name="description" content="Quizzitch — secure preliminary screening terminal for CelesteCon 2026, AEROSS, Delhi Public School R.K. Puram.">
+  <title>Quizzitch · CelesteCon 2026</title>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css" crossorigin="anonymous">
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js" crossorigin="anonymous"></script>
+  <link rel="stylesheet" href="styles/styles.css">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%2307090D'/%3E%3Ccircle cx='16' cy='16' r='10' fill='none' stroke='%2322C3E6' stroke-width='1.6' stroke-dasharray='5 3'/%3E%3Ccircle cx='16' cy='16' r='3.5' fill='%2339D98A'/%3E%3C/svg%3E">
+  <script type="module" src="scripts/app.js"></script>
+</head>
+
+<body data-stage="boot">
+  <noscript><p class="noscript">Quizzitch requires JavaScript. Enable it and reload the page.</p></noscript>
+
+  <!-- ════════ BOOT ════════ -->
+  <div class="boot" id="boot" role="status">
+    <span class="boot__spinner" id="boot-spinner" aria-hidden="true"></span>
+    <p class="boot__title" id="boot-title">Initialising secure terminal…</p>
+    <p class="boot__detail" id="boot-detail" hidden></p>
+  </div>
+
+  <!-- ════════ SHARED TOP BAR (stages 2, 3, 5) ════════ -->
+  <header class="topbar" id="topbar" hidden>
+    <div class="brand"><span class="brand__mark" aria-hidden="true"></span><span class="brand__name">QUIZZITCH</span><span class="brand__sub">CelesteCon 2026</span></div>
+    <ol class="stepper" id="stepper" aria-label="Examination stages">
+      <li data-step="1"><span>1</span>Sign-in</li>
+      <li data-step="2"><span>2</span>Calibration</li>
+      <li data-step="3"><span>3</span>Protocol</li>
+      <li data-step="4"><span>4</span>Examination</li>
+      <li data-step="5"><span>5</span>Receipt</li>
+    </ol>
+  </header>
+
+  <!-- ════════ STAGE 1 · TERMINAL SIGN-IN ════════ -->
+  <main class="stage stage--center" id="stage-signin" hidden>
+    <form class="terminal" id="form-signin" novalidate autocomplete="off" spellcheck="false">
+      <header class="terminal__head">
+        <span class="brand__mark" aria-hidden="true"></span>
+        <div class="terminal__id"><strong>QUIZZITCH</strong><small>CelesteCon 2026 · Candidate Terminal</small></div>
+        <span class="terminal__net" id="net-status">LINK ONLINE</span>
+      </header>
+
+      <h1 class="terminal__title">Candidate Sign-In</h1>
+
+      <div class="field">
+        <label for="in-school-uid">Registration UID (School or Individual)</label>
+        <input id="in-school-uid" name="schoolUid" type="text" inputmode="text" maxlength="36" required placeholder="C26-AB-0101" aria-describedby="hint-school-uid">
+        <p class="field__hint" id="hint-school-uid">School UID (C26-XX-0101 or CLT-2026-SCH-…)</p>
+      </div>
+      <div class="field">
+        <label for="in-team-id">Registration Team ID / Member ID</label>
+        <input id="in-team-id" name="teamId" type="text" maxlength="48" required placeholder="C26-AB-0101-IPOD" aria-describedby="hint-team-id">
+        <p class="field__hint" id="hint-team-id">e.g. C26-AB-0101-IPOD (or Member ID C26-AB-0101-IPOD-M1)</p>
+      </div>
+      <div class="field">
+        <label for="in-name">Candidate Full Name</label>
+        <input id="in-name" name="name" type="text" maxlength="80" required autocapitalize="words" aria-describedby="hint-name">
+        <p class="field__hint" id="hint-name">Exactly as on your team's registration roster</p>
+      </div>
+
+      <p class="form-error" id="signin-error" role="alert" hidden></p>
+      <button class="btn btn--primary btn--block btn--lg" id="btn-signin" type="submit">Authenticate</button>
+
+      <footer class="terminal__foot">
+        <span>Session <b id="session-ref">—</b></span>
+        <span>Build <b id="build-ref">—</b></span>
+      </footer>
+    </form>
+
+    <section class="terminal terminal--resume" id="resume-card" hidden aria-labelledby="resume-title">
+      <h1 class="terminal__title" id="resume-title">Unfinished session found</h1>
+      <p class="muted">This terminal holds a saved session. Resuming is logged in the integrity ledger; your answers and strikes carry over.</p>
+      <dl class="kv">
+        <div><dt>Candidate</dt><dd id="resume-name">—</dd></div>
+        <div><dt>Team · School</dt><dd id="resume-team">—</dd></div>
+        <div><dt>Last saved</dt><dd id="resume-when">—</dd></div>
+      </dl>
+      <button class="btn btn--primary btn--block btn--lg" id="btn-resume" type="button">Resume session</button>
+      <button class="btn btn--ghost btn--block" id="btn-not-me" type="button">This is not me — sign in</button>
+    </section>
+  </main>
+
+  <!-- ════════ STAGE 2 · HARDWARE CALIBRATION ════════ -->
+  <main class="stage" id="stage-calibrate" hidden>
+    <div class="wrap">
+      <h1 class="stage__title">Hardware Permission &amp; Calibration</h1>
+      <p class="stage__lede">Grant camera access, align your face inside the oval, and capture a baseline reference photo. Analysis runs on this device.</p>
+
+      <div class="calib">
+        <section class="card calib__view">
+          <div class="viewport" id="calib-viewport">
+            <video id="cam" playsinline muted autoplay></video>
+            <svg class="reticle" id="reticle" data-state="seek" viewBox="0 0 320 240" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
+              <defs><mask id="oval-mask"><rect width="320" height="240" fill="white"/><ellipse cx="160" cy="114" rx="64" ry="84" fill="black"/></mask></defs>
+              <rect class="reticle__dim" width="320" height="240" mask="url(#oval-mask)"/>
+              <ellipse class="reticle__oval" cx="160" cy="114" rx="64" ry="84"/>
+              <path class="reticle__tick" d="M160 22v10M160 196v10M88 114h10M222 114h10"/>
+            </svg>
+            <div class="viewport__placeholder" id="calib-placeholder">
+              <b>Camera inactive</b>
+              <span>Press “Grant camera access” below.</span>
+            </div>
+            <span class="viewport__tag" id="face-readout" data-state="seek">NO SIGNAL</span>
+          </div>
+
+          <div class="btn-row">
+            <button class="btn btn--primary" id="btn-media" type="button">Grant camera access</button>
+            <button class="btn btn--accent" id="btn-baseline" type="button" disabled>Capture Baseline Reference Photo</button>
+          </div>
+        </section>
+
+        <section class="card calib__side">
+          <h2 class="card__title">Diagnostics</h2>
+          <ul class="checklist" id="checklist">
+            <li data-check="camera" data-state="pending"><i class="led"></i><span>Camera stream acquired<small id="chk-camera-detail">Awaiting permission</small></span></li>
+            <li data-check="light" data-state="pending"><i class="led"></i><span>Lighting luma / contrast adequate<small id="chk-light-detail">—</small></span></li>
+            <li data-check="model" data-state="pending"><i class="led"></i><span>MediaPipe WASM pipeline initialised<small id="chk-model-detail">—</small></span></li>
+          </ul>
+          <button class="btn btn--ghost btn--sm" id="btn-retry-model" type="button" hidden>Retry vision engine</button>
+
+          <figure class="baseline">
+            <img id="baseline-img" alt="Baseline reference photo" hidden>
+            <figcaption id="baseline-empty">No baseline captured yet</figcaption>
+          </figure>
+
+          <p class="form-error" id="calib-error" role="alert" hidden></p>
+          <p class="note">Video never leaves this device. Only the baseline photo and a small number of incident stills are stored with your submission.</p>
+          <button class="btn btn--primary btn--block btn--lg" id="btn-to-protocol" type="button" disabled>Continue to Protocol</button>
+        </section>
+      </div>
+    </div>
+  </main>
+
+  <!-- ════════ STAGE 3 · EXAMINATION PROTOCOL ════════ -->
+  <main class="stage" id="stage-protocol" hidden>
+    <div class="wrap">
+      <h1 class="stage__title">Examination Protocol &amp; Navigation Guide</h1>
+      <p class="stage__lede" id="paper-summary">—</p>
+
+      <div class="protocol">
+        <section class="card">
+          <h2 class="card__title">Marking scheme</h2>
+          <table class="table table--scheme">
+            <thead><tr><th scope="col">Item type</th><th scope="col" class="num">Correct</th><th scope="col" class="num">Incorrect</th><th scope="col" class="num">Unanswered</th><th scope="col">Selection</th></tr></thead>
+            <tbody id="scheme-body"></tbody>
+          </table>
+          <h2 class="card__title">Modules</h2>
+          <ul class="modules-list" id="module-list"></ul>
+        </section>
+
+        <section class="card">
+          <h2 class="card__title">Proctoring &amp; zero-tolerance policy</h2>
+          <ol class="rules">
+            <li><b>Three-strike enforcement.</b> On strike <b data-cfg="security.maxStrikes">3</b> the paper is sealed and submitted immediately, and flagged for panel review.</li>
+            <li><b>Immediate strikes:</b> switching tabs or windows, leaving fullscreen for more than <b data-cfg="security.fullscreenGraceSeconds">10</b> s, a second face in view, a frozen or virtual camera feed, or opening developer tools.</li>
+            <li><b>Advisories</b> (logged, amber): looking away from the screen, leaving the camera frame, sustained speech-level audio. Every <b data-cfg="security.advisoriesPerStrike">3</b> advisories of one kind become a strike.</li>
+            <li><b>Authoritative clock.</b> Time is synchronised with the examination server. Changing the system clock, sleeping the laptop or pausing the page seals the paper.</li>
+            <li><b>Lockdown.</b> Copy, paste, printing, right-click, reload and browser shortcuts are disabled and attempts are logged.</li>
+            <li><b>One sitting.</b> Your identity is locked to this device until you submit. A reload resumes your session and is recorded.</li>
+          </ol>
+        </section>
+
+        <section class="card">
+          <h2 class="card__title">Question palette</h2>
+          <ul class="legend legend--wide">
+            <li><span class="pcell pcell--answered">01</span>Answered</li>
+            <li><span class="pcell pcell--unanswered">02</span>Not answered</li>
+            <li><span class="pcell pcell--marked">03</span>Marked for review</li>
+            <li><span class="pcell pcell--answered-marked">04</span>Answered &amp; marked</li>
+            <li><span class="pcell pcell--unanswered is-current">05</span>Current question</li>
+          </ul>
+          <p class="note">Answered-and-marked questions <b>are</b> scored. Marking is only a reminder for you.</p>
+          <h2 class="card__title">Keyboard</h2>
+          <table class="table table--keys">
+            <tbody>
+              <tr><th scope="row"><kbd>1</kbd>–<kbd>4</kbd> or <kbd>A</kbd>–<kbd>D</kbd></th><td>Select / toggle option</td></tr>
+              <tr><th scope="row"><kbd>M</kbd></th><td>Mark / unmark for review</td></tr>
+              <tr><th scope="row"><kbd>Backspace</kbd></th><td>Clear selection</td></tr>
+              <tr><th scope="row"><kbd>←</kbd> <kbd>→</kbd></th><td>Previous / next question</td></tr>
+            </tbody>
+          </table>
+        </section>
+      </div>
+
+      <section class="card confirm">
+        <label class="check">
+          <input type="checkbox" id="ack">
+          <span>I have read the rules above and accept the <b>CelesteCon Academic Integrity Policy</b>. I will attempt this paper alone, without notes, devices or assistance, and I consent to on-device camera proctoring for its duration.</span>
+        </label>
+        <div class="confirm__row">
+          <p class="release"><i class="led" id="release-led" data-state="busy"></i><span id="release-text">Checking release status…</span></p>
+          <button class="btn btn--primary btn--lg" id="btn-enter-exam" type="button" disabled>Enter Examination Workspace</button>
+        </div>
+      </section>
+    </div>
+  </main>
+
+  <!-- ════════ STAGE 4 · EXAMINATION WORKSPACE ════════ -->
+  <div class="exam" id="stage-exam" hidden>
+    <header class="ribbon">
+      <div class="ribbon__brand"><span class="brand__mark" aria-hidden="true"></span><b>QUIZZITCH</b></div>
+      <div class="ribbon__cand" aria-label="Candidate">
+        <span class="ribbon__uid" id="rb-uid">—</span>
+        <span class="ribbon__name" id="rb-name">—</span>
+        <span class="ribbon__team" id="rb-team">—</span>
+      </div>
+      <div class="ribbon__clock" id="rb-clock" data-level="ok" role="timer" aria-live="off">
+        <small>Time remaining</small>
+        <b id="rb-clock-val">--:--</b>
+        <small id="rb-clock-src">SYNC</small>
+      </div>
+      <div class="ribbon__status">
+        <span class="pill" id="rb-proctor" data-state="secure"><i class="led"></i><span id="rb-proctor-label">Secure</span></span>
+        <span class="pill" id="rb-fs" data-state="secure"><i class="led"></i><span id="rb-fs-label">Fullscreen</span></span>
+        <span class="strikes" id="rb-strikes" role="img" aria-label="Strikes"></span>
+      </div>
+    </header>
+
+    <nav class="mtabs" id="module-tabs" role="tablist" aria-label="Syllabus modules"></nav>
+
+    <div class="exam__body">
+      <main class="qpane" id="qpane" aria-live="polite">
+        <header class="qpane__head">
+          <span class="qnum"><b id="q-num">Q01</b> <small id="q-of">of —</small></span>
+          <span class="qmod" id="q-module">—</span>
+          <span class="badge" id="q-scheme">—</span>
+          <span class="badge badge--value" id="q-value" title="Marks: correct / incorrect">—</span>
+          <span class="qdwell" title="Time on this question"><span aria-hidden="true">⏱</span> <b id="q-dwell">00:00</b></span>
+        </header>
+        <div class="qpane__body">
+          <p class="qstem" id="q-stem"></p>
+          <p class="qsupp" id="q-supp" hidden></p>
+          <p class="qhint" id="q-hint"></p>
+          <div class="opts" id="q-opts" aria-labelledby="q-stem"></div>
+        </div>
+        <footer class="qpane__ctrl">
+          <button class="btn btn--ghost" id="btn-prev" type="button"><span aria-hidden="true">←</span> Previous</button>
+          <button class="btn btn--ghost" id="btn-clear" type="button">Clear Selection</button>
+          <button class="btn btn--mark" id="btn-mark" type="button" aria-pressed="false"><span class="bookmark" aria-hidden="true"></span><span id="btn-mark-label">Mark for Review</span></button>
+          <button class="btn btn--primary" id="btn-next" type="button">Next <span aria-hidden="true">→</span></button>
+        </footer>
+      </main>
+
+      <aside class="palette" id="palette" aria-label="Question palette">
+        <div class="selfview" id="selfview"><span class="selfview__tag">PROCTOR LIVE</span></div>
+        <p class="palette__summary">
+          <span>Answered: <b id="sum-answered">0</b></span>
+          <span>Unanswered: <b id="sum-unanswered">0</b></span>
+          <span>Marked for Review: <b id="sum-marked">0</b></span>
+        </p>
+        <div class="palette__grid" id="palette-grid"></div>
+        <ul class="legend">
+          <li><span class="pcell pcell--answered"></span>Answered</li>
+          <li><span class="pcell pcell--unanswered"></span>Not answered</li>
+          <li><span class="pcell pcell--marked"></span>Marked</li>
+          <li><span class="pcell pcell--answered-marked"></span>Answered + marked</li>
+        </ul>
+        <button class="btn btn--submit btn--block btn--lg" id="btn-review-submit" type="button">Final Review &amp; Submit</button>
+      </aside>
+    </div>
+
+    <div class="shield" id="shield" aria-hidden="true">
+      <b>Paper hidden</b>
+      <span>Return to the examination window in fullscreen to continue.</span>
+    </div>
+  </div>
+
+  <!-- ════════ STAGE 5 · RECEIPT ════════ -->
+  <main class="stage" id="stage-sealed" hidden>
+    <div class="wrap wrap--narrow">
+      <section class="card sealed">
+        <div class="sealed__icon" aria-hidden="true"></div>
+        <h1 class="sealed__title">Submission Successfully Received &amp; Sealed</h1>
+        <p class="muted" id="seal-reason">—</p>
+
+        <dl class="kv kv--grid">
+          <div><dt>School UID</dt><dd id="rc-uid">—</dd></div>
+          <div><dt>Candidate</dt><dd id="rc-name">—</dd></div>
+          <div><dt>Team · Division</dt><dd id="rc-team">—</dd></div>
+          <div><dt>Session</dt><dd id="rc-session" class="mono">—</dd></div>
+          <div><dt>Total answered</dt><dd id="rc-answered">—</dd></div>
+          <div><dt>Skipped</dt><dd id="rc-skipped">—</dd></div>
+          <div><dt>Marked for review</dt><dd id="rc-marked">—</dd></div>
+          <div><dt>Time elapsed</dt><dd id="rc-elapsed">—</dd></div>
+          <div class="kv--span"><dt>Sealed at</dt><dd id="rc-sealed">—</dd></div>
+        </dl>
+
+        <div class="checksum">
+          <span>SHA-256 payload checksum</span>
+          <code id="rc-checksum">—</code>
+        </div>
+
+        <ul class="dispatch">
+          <li><span>Examination database</span><b id="dp-firebase" data-state="busy">—</b></li>
+          <li><span>Jotform response mirror</span><b id="dp-jotform" data-state="idle">—</b></li>
+        </ul>
+
+        <button class="btn btn--primary btn--lg" id="btn-print" type="button">Print / Save PDF Receipt</button>
+        <p class="note">Keep this receipt. The checksum lets the AEROSS panel prove your stored responses were not altered after sealing. You may now close this window.</p>
+      </section>
+    </div>
+  </main>
+
+  <!-- ════════ PRINT-ONLY OFFICIAL RECORD ════════ -->
+  <section class="print-receipt" id="print-receipt" aria-hidden="true">
+    <div class="print-watermark" id="pr-watermark"></div>
+    <header class="pr-head">
+      <div>
+        <p class="pr-org">AEROSS · The Aerospace Society · Delhi Public School, R.K. Puram</p>
+        <h1>Official Submission Record</h1>
+        <p id="pr-event">—</p>
+      </div>
+      <div class="pr-stamp">SEALED</div>
+    </header>
+    <table class="pr-id">
+      <tbody>
+        <tr><th>School UID</th><td id="pr-uid"></td><th>Candidate</th><td id="pr-name"></td></tr>
+        <tr><th>Team ID</th><td id="pr-team"></td><th>Division</th><td id="pr-division"></td></tr>
+        <tr><th>Session</th><td id="pr-session"></td><th>Paper</th><td id="pr-paper"></td></tr>
+        <tr><th>Timestamp</th><td id="pr-stamp" colspan="3"></td></tr>
+      </tbody>
+    </table>
+    <p class="pr-summary" id="pr-summary"></p>
+    <table class="pr-ledger">
+      <thead><tr><th class="num">Q</th><th>Module</th><th>Item ID</th><th>Response</th><th>Marked</th><th class="num">Time</th></tr></thead>
+      <tbody id="pr-rows"></tbody>
+    </table>
+    <footer class="pr-foot">
+      <p><b>SHA-256:</b> <code id="pr-checksum"></code></p>
+      <p><b>Salt:</b> <code id="pr-salt"></code></p>
+      <p>This record is generated from the sealed submission package. Correctness is not shown. Any alteration invalidates the checksum.</p>
+    </footer>
+  </section>
+  <p class="print-blocked">Printing is disabled during the examination.</p>
+
+  <!-- ════════ MODALS ════════ -->
+  <div class="modal" id="modal-review" hidden>
+    <div class="modal__card" role="dialog" aria-modal="true" aria-labelledby="rv-title">
+      <h2 class="modal__title" id="rv-title">Final Review &amp; Submit</h2>
+      <div class="stats">
+        <div class="stat stat--ok"><span>Answered</span><b id="rv-answered">0</b></div>
+        <div class="stat"><span>Unanswered</span><b id="rv-unanswered">0</b></div>
+        <div class="stat stat--warn"><span>Marked</span><b id="rv-marked">0</b></div>
+      </div>
+      <ul class="rv-modules" id="rv-modules"></ul>
+      <div class="rv-lists">
+        <div><h3>Unanswered</h3><div class="chips" id="rv-unanswered-list"></div></div>
+        <div><h3>Marked for review</h3><div class="chips" id="rv-marked-list"></div></div>
+      </div>
+      <label class="check check--danger">
+        <input type="checkbox" id="rv-confirm">
+        <span>I understand that submitting seals my paper permanently. I cannot return to it.</span>
+      </label>
+      <div class="modal__actions">
+        <button class="btn btn--ghost" id="btn-review-return" type="button">Return to paper</button>
+        <button class="btn btn--submit" id="btn-submit-final" type="button" disabled>Submit &amp; Seal</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal modal--lock" id="modal-fslock" hidden>
+    <div class="modal__card modal__card--lock" role="alertdialog" aria-modal="true" aria-labelledby="fs-title" aria-describedby="fs-desc">
+      <div class="ring" id="fs-ring" style="--p:1"><b id="fs-count">10</b><small>seconds</small></div>
+      <h2 class="modal__title" id="fs-title">Fullscreen required</h2>
+      <p id="fs-desc">The paper is hidden. Return to fullscreen before the countdown ends or a strike is recorded. Strikes: <b id="fs-strikes">0 / 3</b></p>
+      <button class="btn btn--primary btn--lg" id="btn-fs-return" type="button">Return to fullscreen</button>
+    </div>
+  </div>
+
+  <div class="modal modal--lock" id="modal-lockout" hidden>
+    <div class="modal__card modal__card--lock" role="alertdialog" aria-modal="true" aria-labelledby="lo-title">
+      <h2 class="modal__title" id="lo-title">Paper locked</h2>
+      <p id="lockout-text">—</p>
+    </div>
+  </div>
+
+  <div class="toasts" id="toasts" aria-live="polite"></div>
+</body>
+</html>

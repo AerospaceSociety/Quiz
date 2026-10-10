@@ -1,0 +1,21 @@
+{
+  "name": "quizzitch-portal",
+  "version": "1.0.0",
+  "description": "Secure Assessment Portal - CelesteCon 2026",
+  "scripts": {
+    "dev": "serve . -l 8000",
+    "start": "serve . -l 8000",
+    "deploy": "wrangler pages deploy .",
+    "preview": "wrangler pages dev .",
+    "provision:jotform": "python scripts/provision_jotform.py",
+    "relay": "node scripts/relay.js",
+    "relay:py": "uvicorn scripts.webhook_relay:app --port 8080"
+  },
+  "keywords": [],
+  "author": "AEROSS",
+  "license": "ISC",
+  "devDependencies": {
+    "serve": "^14.2.6",
+    "wrangler": "^4.128.0"
+  }
+}

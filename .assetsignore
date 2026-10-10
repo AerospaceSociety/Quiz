@@ -1,0 +1,28 @@
+# Node dependencies
+node_modules/
+
+# Cloudflare Wrangler
+.wrangler/
+wrangler.jsonc
+
+# Repo / tooling meta — never served
+.git/
+.gitignore
+.assetsignore
+.vercelignore
+.claude/
+README.md
+package.json
+package-lock.json
+vercel.json
+firestore.rules
+quizzitch-legacy-backup.zip
+
+# The question bank is seeded into Firestore from the admin deck and must
+# never be publicly downloadable. (Remove this line only for offline rehearsals
+# with exam.questionSource = "local".)
+config/questions.json
+
+# OS files
+.DS_Store
+Thumbs.db
