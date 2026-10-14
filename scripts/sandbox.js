@@ -111,34 +111,118 @@ function onKeyUp(e) {
 }
 
 /* --- 03 · FOCUS & VISIBILITY --------------------------------------------- */
-let away = false;   // one departure = one strike, however long it lasts and however many events it fires
+let isBlurred = false;
+let hiddenStrike = false;
+let blurStart = 0;
+let blurTimer = null;
+let blurGraceLeft = 0;
+let totalBlurCount = 0;
+let cumulativeBlurSec = 0;
 
-function focusLost(kind) {
-  view.setShield(true);
-  if (!inExam() || away) return;
-  const t = now();
-  if (t - lastFocusLoss < cfg().security.focusDedupeMs) return;   // blur + visibilitychange arrive together
-  lastFocusLoss = t;
-  away = true;
-  recordIncident({
-    type: kind,
-    level: Level.STRIKE,
-    message: kind === 'TAB_HIDDEN' ? 'Examination tab hidden (tab switch / minimise)' : 'Examination window lost focus'
-  });
-  toast('Focus breach recorded', 'Leaving the examination window is a strike.', 'danger', 6000);
+function startBlurGrace() {
+  stopBlurGrace();
+  blurGraceLeft = cfg().security.blurGraceSeconds || 5;
+  view.showFsLock(blurGraceLeft);
+  blurTimer = setInterval(() => {
+    if (!inExam() || !isBlurred) {
+      stopBlurGrace();
+      return;
+    }
+    blurGraceLeft -= 1;
+    view.showFsLock(Math.max(0, blurGraceLeft));
+    if (blurGraceLeft <= 0) {
+      stopBlurGrace();
+      recordIncident({
+        type: 'WINDOW_BLUR_TIMEOUT',
+        level: Level.STRIKE,
+        message: `Did not return to examination window within ${cfg().security.blurGraceSeconds || 5} s grace period`
+      });
+    }
+  }, 1000);
 }
 
-function focusRestored() {
-  if (document.hidden || !document.hasFocus()) return;
-  if (isFullscreen() || !cfg().security.requireFullscreen) view.setShield(false);
-  if (inExam() && away) {
-    away = false;
-    recordIncident({ type: 'FOCUS_RESTORED', level: Level.INFO, message: 'Examination window focus restored' });
+function stopBlurGrace() {
+  if (blurTimer) {
+    clearInterval(blurTimer);
+    blurTimer = null;
   }
 }
 
-const onVisibility = () => (document.hidden ? focusLost('TAB_HIDDEN') : focusRestored());
-const onBlur = () => focusLost('WINDOW_BLUR');
+function handleTabHidden() {
+  view.setShield(true);
+  if (!inExam() || hiddenStrike) return;
+  hiddenStrike = true;
+  stopBlurGrace();
+  recordIncident({
+    type: 'TAB_HIDDEN',
+    level: Level.STRIKE,
+    message: 'Examination tab hidden (tab switch / minimise)'
+  });
+  toast('Focus breach recorded', 'Minimising or switching tabs is an immediate strike with no grace period.', 'danger', 6000);
+}
+
+function handleWindowBlur() {
+  if (document.hidden) {
+    handleTabHidden();
+    return;
+  }
+  view.setShield(true);
+  if (!inExam() || isBlurred) return;
+  isBlurred = true;
+  blurStart = now();
+  totalBlurCount += 1;
+  startBlurGrace();
+}
+
+function handleFocusRestored() {
+  stopBlurGrace();
+  if (isBlurred) {
+    isBlurred = false;
+    const durationSec = Math.max(0, (now() - blurStart) / 1000);
+    cumulativeBlurSec += durationSec;
+
+    // Log EVERY blur as an advisory with its duration
+    recordIncident({
+      type: 'WINDOW_BLUR',
+      level: Level.ADVISORY,
+      message: `Examination window lost focus for ${durationSec.toFixed(1)} s`,
+      data: { durationSec, count: totalBlurCount, cumulativeSec: cumulativeBlurSec }
+    });
+
+    const maxCum = cfg().security.blurMaxCumulativeSeconds || 20;
+    const maxCnt = cfg().security.blurMaxCount || 4;
+
+    if (cumulativeBlurSec > maxCum) {
+      recordIncident({
+        type: 'CUMULATIVE_BLUR_EXCEEDED',
+        level: Level.STRIKE,
+        message: `Cumulative off-focus time exceeded ${maxCum} s (${cumulativeBlurSec.toFixed(1)} s total)`
+      });
+    } else if (totalBlurCount > maxCnt) {
+      recordIncident({
+        type: 'BLUR_COUNT_EXCEEDED',
+        level: Level.STRIKE,
+        message: `Total blur count exceeded limit of ${maxCnt} (${totalBlurCount} blurs recorded)`
+      });
+    }
+  }
+
+  if (hiddenStrike && !document.hidden) {
+    hiddenStrike = false;
+    recordIncident({ type: 'TAB_RESTORED', level: Level.INFO, message: 'Examination tab visibility restored' });
+  }
+
+  if (!document.hidden && document.hasFocus()) {
+    if (isFullscreen() || !cfg().security.requireFullscreen) {
+      view.setShield(false);
+      view.hideFsLock();
+    }
+  }
+}
+
+const onVisibility = () => (document.hidden ? handleTabHidden() : handleFocusRestored());
+const onBlur = () => handleWindowBlur();
+const onFocus = () => handleFocusRestored();
 
 /* --- 04 · FULLSCREEN ENFORCEMENT ----------------------------------------- */
 function onFullscreenChange() {
@@ -287,7 +371,7 @@ export function installSandbox(h = {}) {
   document.addEventListener('webkitfullscreenchange', onFullscreenChange);
   document.addEventListener('visibilitychange', onVisibility);
   window.addEventListener('blur', onBlur);
-  window.addEventListener('focus', focusRestored);
+  window.addEventListener('focus', onFocus);
   window.addEventListener('resize', onResize);
   window.addEventListener('beforeunload', onBeforeUnload);
   window.addEventListener('popstate', onPopState);
@@ -305,12 +389,11 @@ export function armSandbox() {
 
   // document.hasFocus() poll — catches focus loss to overlays that never fire `blur`.
   focusPoll = setInterval(() => {
-    if (inExam() && !document.hidden && !document.hasFocus()) focusLost('WINDOW_BLUR');
+    if (inExam() && !document.hidden && !document.hasFocus()) handleWindowBlur();
   }, 2000);
 
-  away = false;
   if (!document.hidden && document.hasFocus() && (isFullscreen() || !cfg().security.requireFullscreen)) view.setShield(false);
-  else if (!document.hidden && !document.hasFocus()) focusLost('WINDOW_BLUR');
+  else if (!document.hidden && !document.hasFocus()) handleWindowBlur();
 
   if (window.screen && window.screen.isExtended) {
     recordIncident({ type: 'MULTI_DISPLAY', level: Level.ADVISORY, message: 'More than one display is connected' });
@@ -325,6 +408,7 @@ export function armSandbox() {
 export function disarmSandbox() {
   armed = false;
   stopGrace();
+  stopBlurGrace();
   view.hideFsLock();
   view.setShield(false);
   if (focusPoll) clearInterval(focusPoll);

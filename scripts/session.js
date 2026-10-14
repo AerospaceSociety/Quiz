@@ -142,11 +142,13 @@ export function recordIncident(inc) {
   const sec = settings ? settings.security : { maxStrikes: 3, advisoriesPerStrike: 3 };
   const live = S.stage === Stage.EXAM && !S.locked;
 
+  const NON_ESCALATING = new Set(['WINDOW_BLUR', 'GAZE_EVASION', 'DEVICE_FREEZE', 'POSE_UNKNOWN']);
+
   if (live && inc.level === Level.ADVISORY) {
     S.advisories[inc.type] = (S.advisories[inc.type] || 0) + 1;
     S.lastAdvisoryAt = t;
     bus.emit(EV.INCIDENT, entry);
-    if (S.advisories[inc.type] % sec.advisoriesPerStrike === 0) {
+    if (!NON_ESCALATING.has(inc.type) && S.advisories[inc.type] % sec.advisoriesPerStrike === 0) {
       recordIncident({
         type: `${inc.type}_ESCALATED`,
         level: Level.STRIKE,
