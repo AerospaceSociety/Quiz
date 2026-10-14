@@ -20,7 +20,7 @@ index.html ─ scripts/app.js ─────────── stage machine (1
                ├─ session.js             private state, event bus, Security Audit Ledger, strike policy
                ├─ engine.js              bank validation, seeded paper build, answers, marks, keyboard
                ├─ render.js              every DOM write (text nodes only; KaTeX for $…$)
-               ├─ proctor.js             camera+mic, MediaPipe Face Landmarker @ ~2.5 FPS, pose, freeze, audio
+               ├─ proctor.js             camera, MediaPipe Face Landmarker @ ~2.5 FPS, pose, freeze
                ├─ sandbox.js             key lockdown, fullscreen grace, focus/visibility, DevTools tripwire
                │    └─ tripwire.worker.js  `debugger` timing probe, off the main thread
                ├─ timer.js               server-offset handshake, monotonic countdown, anomaly detection
@@ -112,12 +112,13 @@ candidate gets a fresh identity.
 | Multiple faces (≥ 1.5 s) | **Strike** | MediaPipe, `numFaces: 2` |
 | Frozen / virtual camera feed (≥ 5 s) | **Strike** | 32×24 luma-grid delta ≈ 0 or `<video>` clock stalled; virtual-camera labels rejected at calibration |
 | DevTools tripwire | **Strike** | worker `debugger` pause > 800 ms |
-| Camera/mic track ended | **Strike** | unplugged or permission revoked |
-| Face absent > 3 s | Advisory | |
-| Head yaw > 30° or pitch down > 20° for 3 s | Advisory | relative to the baseline pose captured at calibration |
-| Sustained speech-level audio (2 s) | Advisory | threshold = max(floor, 6 × calibrated noise) |
-| Docked-DevTools resize, blocked serious shortcut, print, back-navigation, reload dialog | Advisory | |
-| Clock skew or execution freeze > 5 s | **Seal** (`anomalyAction: "submit"`) or strike | a “Leave site?” dialog is recognised and logged as an advisory instead |
+| Camera track ended | **Strike** | unplugged or permission revoked |
+| Face absent > 6 s | Advisory | requires 3 consecutive missed frames before timer begins |
+| Head yaw > 35° or pitch down > 30° for 6 s | Advisory | relative to baseline pose captured at calibration (advisory only) |
+| Docked-DevTools resize, blocked shortcut, print, reload attempt | Advisory | logged to audit ledger |
+| Clock skew (≥ 3 s) or freeze (≥ 8 s) | Strike / Advisory | clock skew strikes & resyncs; freeze logged as advisory only |
+
+*(Microphone audio is NOT accessed, recorded or monitored — proctoring is vision-only.)*
 
 Every 3 advisories of one kind become a strike; **3 strikes seal the paper** (verdict `DISQUALIFIED`).
 Verdicts: `CLEAN` · `REVIEW` (advisories only) · `FLAGGED` (strikes) · `DISQUALIFIED`.

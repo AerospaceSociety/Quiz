@@ -1,6 +1,6 @@
 /* ==========================================================================
    QUIZZITCH — proctor.js
-   On-device vision & audio proctoring, built for 4 GB / integrated-graphics
+   On-device vision proctoring, built for 4 GB / integrated-graphics
    laptops:
 
      • MediaPipe Face Landmarker (WASM, CPU delegate) loaded lazily from CDN.
@@ -9,7 +9,6 @@
      • Every sample is drawn once into a detached 320×240 canvas; that buffer
        feeds inference, the lighting check and the freeze detector, so the
        full-resolution frame is never processed.
-     • Web Audio AnalyserNode RMS for the calibration meter and noise spikes.
 
    Nothing leaves the device except the baseline photo and a small number of
    160×120 incident thumbnails attached to strikes.
@@ -27,9 +26,6 @@ let fctx = null;
 let thumbCanvas = null;
 let landmarker = null;
 let loadingModel = null;
-let audioCtx = null;
-let analyser = null;
-let audioBuf = null;
 let rafId = 0;
 let lastSample = 0;
 let mode = 'idle';          // idle | calibrate | exam
@@ -46,10 +42,8 @@ const tracker = {
   multiSince: 0,
   gazeSince: 0,
   freezeSince: 0,
-  loudSince: 0,
   prevGrid: null,
   lastVideoTime: -1,
-  peakMic: 0,
   lastFlag: new Map()
 };
 
@@ -83,17 +77,6 @@ export async function acquireMedia(videoEl) {
   thumbCanvas.width = 160;
   thumbCanvas.height = 120;
 
-  const AC = window.AudioContext || window.webkitAudioContext;
-  if (AC && stream.getAudioTracks().length) {
-    audioCtx = new AC();
-    const src = audioCtx.createMediaStreamSource(stream);
-    analyser = audioCtx.createAnalyser();
-    analyser.fftSize = 1024;
-    audioBuf = new Float32Array(analyser.fftSize);
-    src.connect(analyser);                      // analyser is not connected to destination — no feedback
-    if (audioCtx.state === 'suspended') audioCtx.resume().catch(() => {});
-  }
-
   stream.getTracks().forEach((track) => {
     track.addEventListener('ended', () => {
       if (S.stage === Stage.EXAM) {
@@ -107,11 +90,6 @@ export async function acquireMedia(videoEl) {
 export function cameraLabel() {
   const t = stream && stream.getVideoTracks()[0];
   return t ? t.label || 'Camera' : '';
-}
-
-export function micLabel() {
-  const t = stream && stream.getAudioTracks()[0];
-  return t ? t.label || 'Microphone' : '';
 }
 
 export function isVirtualCamera() {
@@ -128,9 +106,6 @@ export function releaseMedia() {
   stopLoop();
   if (stream) stream.getTracks().forEach((t) => t.stop());
   stream = null;
-  if (audioCtx) audioCtx.close().catch(() => {});
-  audioCtx = null;
-  analyser = null;
   if (landmarker) { try { landmarker.close(); } catch (_) { /* no-op */ } }
   landmarker = null;
   lastGoodPose = null;
@@ -217,14 +192,6 @@ function poseFromMatrix(m) {
   return { yaw: Math.atan2(fx, fz) * RAD, pitch: Math.asin(clamp(fy, -1, 1)) * RAD };
 }
 
-function micLevel() {
-  if (!analyser) return 0;
-  analyser.getFloatTimeDomainData(audioBuf);
-  let s = 0;
-  for (let i = 0; i < audioBuf.length; i++) s += audioBuf[i] * audioBuf[i];
-  return Math.sqrt(s / audioBuf.length);
-}
-
 /** Runs one throttled sample: draw → light/freeze → inference → pose. */
 function sample(ts) {
   const s = cfg().proctoring;
@@ -276,9 +243,7 @@ function sample(ts) {
     if (calibrationPoses.length > 20) calibrationPoses.shift();
   }
 
-  const level = micLevel();
-  tracker.peakMic = Math.max(tracker.peakMic * 0.96, level);
-  return { light, delta, videoAdvancing, faces, pose, box, level };
+  return { light, delta, videoAdvancing, faces, pose, box };
 }
 
 /* --- 04 · CALIBRATION ---------------------------------------------------- */
@@ -351,7 +316,7 @@ export function startSurveillance() {
   lastGoodPose = null;
   lastGoodPoseTime = 0;
   nullMatrixSince = 0;
-  Object.assign(tracker, { noFaceSince: 0, missedFaceFrames: 0, multiSince: 0, gazeSince: 0, freezeSince: 0, loudSince: 0 });
+  Object.assign(tracker, { noFaceSince: 0, missedFaceFrames: 0, multiSince: 0, gazeSince: 0, freezeSince: 0 });
   startLoop();
 }
 
@@ -422,14 +387,6 @@ function evaluate(r, t) {
       }
     } else {
       tracker.gazeSince = 0;
-    }
-  }
-
-  if (analyser && S.baseline) {
-    const threshold = Math.max(s.audioSpikeFloor, S.baseline.noise * s.audioSpikeFactor);
-    if (since('loudSince', r.level > threshold) >= s.audioSustainSeconds) {
-      flag('AUDIO_ACTIVITY', Level.ADVISORY, 'Sustained speech-level audio detected', { rms: +r.level.toFixed(3) });
-      tracker.loudSince = t;
     }
   }
 }

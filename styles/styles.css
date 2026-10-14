@@ -344,17 +344,6 @@ body[data-stage="calibrate"] .stage, body[data-stage="protocol"] .stage, body[da
 }
 .viewport__tag[data-state="lock"] { color: var(--green); }
 
-.micmeter { display: grid; grid-template-columns: auto 1fr 3.5em; align-items: center; gap: 12px; font: 600 12px var(--mono); color: var(--ink-3); }
-.micmeter__track { height: 8px; border-radius: 4px; background: var(--slate-3); overflow: hidden; }
-.micmeter__track i {
-  display: block; height: 100%;
-  background: linear-gradient(90deg, var(--green) 0 60%, var(--amber) 60% 85%, var(--crimson) 85%);
-  transform-origin: left;
-  transform: scaleX(0);
-  transition: transform .15s linear;
-}
-.micmeter__value { text-align: right; }
-
 .checklist { list-style: none; margin: 0 0 12px; padding: 0; display: grid; gap: 4px; }
 .checklist li {
   display: flex; gap: 12px; align-items: flex-start;

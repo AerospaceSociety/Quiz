@@ -3,7 +3,7 @@
    Boot sequence and the five-stage candidate state machine:
 
      1 SIGN-IN    → format validation, roster check, identity lock
-     2 CALIBRATE  → camera + mic, lighting, MediaPipe, baseline reference
+     2 CALIBRATE  → camera, lighting, MediaPipe, baseline reference
      3 PROTOCOL   → rules, integrity acknowledgement, invigilator release
      4 EXAM       → server-synced clock, workspace, proctoring, sandbox
      5 SEALED     → checksum, dispatch, printable receipt

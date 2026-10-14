@@ -60,10 +60,6 @@
     "lumaMin": 45,
     "lumaMax": 215,
     "contrastMin": 14,
-    "micMinLevel": 0.02,
-    "audioSpikeFactor": 6,
-    "audioSpikeFloor": 0.08,
-    "audioSustainSeconds": 2,
     "flagCooldownSeconds": 20,
     "incidentThumbs": 12,
     "virtualCameraPattern": "obs|virtual|manycam|snap camera|xsplit|droidcam|epoccam|ndi|camtwist|vcam|iriun"

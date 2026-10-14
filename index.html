@@ -164,7 +164,7 @@
           <ol class="rules">
             <li><b>Three-strike enforcement.</b> On strike <b data-cfg="security.maxStrikes">3</b> the paper is sealed and submitted immediately, and flagged for panel review.</li>
             <li><b>Immediate strikes:</b> switching tabs or windows, leaving fullscreen for more than <b data-cfg="security.fullscreenGraceSeconds">10</b> s, a second face in view, a frozen or virtual camera feed, or opening developer tools.</li>
-            <li><b>Advisories</b> (logged, amber): looking away from the screen, leaving the camera frame, sustained speech-level audio. Every <b data-cfg="security.advisoriesPerStrike">3</b> advisories of one kind become a strike.</li>
+            <li><b>Advisories</b> (logged, amber): looking away from the screen or leaving the camera frame. (Microphone audio is not monitored; only camera feed and face positioning are tracked.) Every <b data-cfg="security.advisoriesPerStrike">3</b> advisories of one kind become a strike.</li>
             <li><b>Authoritative clock.</b> Time is synchronised with the examination server. Changing the system clock, sleeping the laptop or pausing the page seals the paper.</li>
             <li><b>Lockdown.</b> Copy, paste, printing, right-click, reload and browser shortcuts are disabled and attempts are logged.</li>
             <li><b>One sitting.</b> Your identity is locked to this device until you submit. A reload resumes your session and is recorded.</li>
@@ -197,7 +197,7 @@
       <section class="card confirm">
         <label class="check">
           <input type="checkbox" id="ack">
-          <span>I have read the rules above and accept the <b>CelesteCon Academic Integrity Policy</b>. I will attempt this paper alone, without notes, devices or assistance, and I consent to on-device camera proctoring for its duration.</span>
+          <span>I have read the rules above and accept the <b>CelesteCon Academic Integrity Policy</b>. I will attempt this paper alone, without notes, devices or assistance, and I consent to on-device camera proctoring for its duration (microphone audio is not recorded or monitored).</span>
         </label>
         <div class="confirm__row">
           <p class="release"><i class="led" id="release-led" data-state="busy"></i><span id="release-text">Checking release status…</span></p>
