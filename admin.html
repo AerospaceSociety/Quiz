@@ -171,6 +171,12 @@
           <p class="tool-status" id="key-status"></p>
         </section>
         <section class="card">
+          <h2 class="card__title">Upload candidate roster</h2>
+          <p class="note">Upload candidate roster (CSV or JSON). Required fields: <code>schoolUid, teamId, name</code> (optional: <code>memberId, division</code>). Generates authoritative <code>identityKey</code> and writes to <code>roster/{identityKey}</code>.</p>
+          <input type="file" id="file-roster" accept=".csv,.json,application/json,text/csv">
+          <p class="tool-status" id="roster-status"></p>
+        </section>
+        <section class="card">
           <h2 class="card__title">Release an identity lock</h2>
           <p class="note">When a candidate's device fails and they must continue elsewhere. Open the candidate's forensic record and use “Release identity lock”, or paste the identity key here.</p>
           <div class="btn-row"><input type="text" id="in-identity" class="input" placeholder="identity key (40 hex)"><button class="btn btn--ghost btn--sm" id="btn-release" type="button">Release</button></div>

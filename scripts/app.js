@@ -110,8 +110,17 @@ async function rosterCheck(schoolUid, teamId, name) {
   const out = { ok: true, verified: false, schoolName: defaultSchoolName, name, memberId: null };
   if (mode === 'off' || !fb.isReady()) return out;
   const roster = await fb.fetchRoster(schoolUid);
-  const strict = mode === 'strict';
+  const strict = mode === 'strict' || mode === 'enforced';
   if (!roster) {
+    const cleanTeamId = teamId.replace(/-M\d{1,2}$/i, '');
+    const candidateKey = await identityKeyFor(schoolUid, cleanTeamId, normName(name));
+    const entry = await fb.fetchRosterEntry(candidateKey);
+    if (entry) {
+      out.verified = true;
+      out.name = entry.name || name;
+      out.memberId = entry.memberId || null;
+      return out;
+    }
     return strict ? { ok: false, message: `This ${isIndividual ? 'Registration' : 'School'} UID is not registered for CelesteCon 2026.` } : out;
   }
   out.schoolName = roster.schoolName || roster.school?.name || defaultSchoolName;
@@ -146,6 +155,15 @@ async function rosterCheck(schoolUid, teamId, name) {
   }
 
   if (!team) {
+    const cleanTeamId = teamId.replace(/-M\d{1,2}$/i, '');
+    const candidateKey = await identityKeyFor(schoolUid, cleanTeamId, normName(name));
+    const entry = await fb.fetchRosterEntry(candidateKey);
+    if (entry) {
+      out.verified = true;
+      out.name = entry.name || name;
+      out.memberId = entry.memberId || null;
+      return out;
+    }
     return strict ? { ok: false, message: `Team ${teamId} is not registered under ${schoolUid}.` } : out;
   }
 
@@ -210,6 +228,10 @@ async function onSignin(e) {
     }), 10000, 'Identity check');
 
     if (!claim.ok) {
+      if (claim.reason === 'NOT_ROSTERED') {
+        view.signinError('Candidate identity is not on the authorised event roster. Check details or contact invigilator.');
+        return;
+      }
       view.signinError(claim.reason === 'ALREADY_SUBMITTED'
         ? 'A sealed submission already exists for this candidate. Contact the invigilator if this is an error.'
         : 'This candidate is already signed in on another device. Ask the invigilator to release the lock.');

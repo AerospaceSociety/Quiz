@@ -151,7 +151,7 @@
     "teamIdPattern": "^(?:C26-[A-Z]{2}-\\d{4}-(?:SMT|VOL|DISP|IPOD|IPD|BPP|ATH|THT|THEATRE|CJAM|ROC|RCKT|APRIX|F1|PRIX)(?:-(?:SR|JR|T\\d{1,2}))?(?:-M\\d{1,2})?|(?:(?:CLT-2026-)?(?:SCH|IND)-\\d{4,8}-)?(?:DISP|IPD|THEATRE|THT|IPOD)-T\\d{1,2}(?:-\\d{1,4})?(?:-M\\d{1,2})?)$",
     "teamIdExample": "C26-AB-0101-IPOD",
     "minNameLength": 3,
-    "rosterCheck": "advisory"
+    "rosterCheck": "enforced"
   },
   "firebase": {
     "enabled": true,

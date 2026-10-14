@@ -17,8 +17,9 @@
 import * as fb from './firebase.js';
 import {
   $, h, mount, setText, show, sha256Hex, canonicalJSON, istStamp, istTime, mmss, pad,
-  downloadBlob, toCSV, deepFreeze
+  downloadBlob, toCSV, deepFreeze, normName
 } from './util.js';
+import { identityKeyFor } from './submission.js';
 
 const OFFLINE_MS = 75000;
 const STATUS_ORDER = { flagged: 0, warning: 1, secure: 2, offline: 3, submitted: 4 };
@@ -581,6 +582,104 @@ async function onKeyFile() {
   }
 }
 
+async function parseRosterFile(file) {
+  const text = await file.text();
+  const name = file.name.toLowerCase();
+  let rawList = [];
+
+  if (name.endsWith('.json') || text.trim().startsWith('[') || text.trim().startsWith('{')) {
+    const data = JSON.parse(text);
+    if (Array.isArray(data)) {
+      rawList = data;
+    } else if (data && typeof data === 'object') {
+      if (Array.isArray(data.candidates)) rawList = data.candidates;
+      else if (Array.isArray(data.roster)) rawList = data.roster;
+      else {
+        for (const [k, v] of Object.entries(data)) {
+          if (v && v.teams) {
+            const sUid = k;
+            for (const [tId, team] of Object.entries(v.teams)) {
+              const members = team.members || [];
+              for (const m of members) {
+                const mName = typeof m === 'string' ? m : m.name;
+                const mId = typeof m === 'object' ? m.memberId : '';
+                rawList.push({ schoolUid: sUid, teamId: tId, name: mName, memberId: mId });
+              }
+            }
+          }
+        }
+      }
+    }
+  } else {
+    const lines = text.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
+    if (lines.length < 2) throw new Error('CSV must have a header row and at least one candidate row.');
+    const headers = lines[0].split(',').map((h) => h.trim().toLowerCase().replace(/^["']|["']$/g, ''));
+    const sIdx = headers.findIndex((h) => h.includes('school'));
+    const tIdx = headers.findIndex((h) => h.includes('team'));
+    const nIdx = headers.findIndex((h) => h.includes('name') || h.includes('candidate') || h.includes('student'));
+    const mIdx = headers.findIndex((h) => h.includes('member'));
+    const dIdx = headers.findIndex((h) => h.includes('division'));
+
+    if (sIdx === -1 || tIdx === -1 || nIdx === -1) {
+      throw new Error('CSV header must contain "schoolUid", "teamId", and "name" columns.');
+    }
+
+    for (let i = 1; i < lines.length; i++) {
+      const cols = lines[i].split(',').map((c) => c.trim().replace(/^["']|["']$/g, ''));
+      if (cols.length <= Math.max(sIdx, tIdx, nIdx)) continue;
+      rawList.push({
+        schoolUid: cols[sIdx],
+        teamId: cols[tIdx],
+        name: cols[nIdx],
+        memberId: mIdx !== -1 ? cols[mIdx] : '',
+        division: dIdx !== -1 ? cols[dIdx] : ''
+      });
+    }
+  }
+
+  const entries = [];
+  for (const item of rawList) {
+    if (!item.schoolUid || !item.teamId || !item.name) continue;
+    const cleanTeamId = item.teamId.replace(/-M\d{1,2}$/i, '');
+    const normalizedName = normName(item.name);
+    const key = await identityKeyFor(item.schoolUid.trim(), cleanTeamId, normalizedName);
+    entries.push({
+      identityKey: key,
+      schoolUid: item.schoolUid.trim(),
+      teamId: item.teamId.trim(),
+      cleanTeamId,
+      name: item.name.trim(),
+      normName: normalizedName,
+      memberId: (item.memberId || '').trim(),
+      division: (item.division || '').trim()
+    });
+  }
+  return entries;
+}
+
+async function onRosterFile() {
+  const file = $('file-roster').files && $('file-roster').files[0];
+  if (!file) return;
+  setText('roster-status', 'Parsing roster…');
+  try {
+    const entries = await parseRosterFile(file);
+    if (!entries.length) throw new Error('No valid candidate records found in file.');
+    if (!confirm(`Upload ${entries.length} candidates to the authoritative roster? Existing entries with the same identity key will be updated.`)) {
+      $('file-roster').value = '';
+      setText('roster-status', 'Cancelled.');
+      return;
+    }
+    const n = await fb.uploadRoster(entries);
+    $('file-roster').value = '';
+    setText('roster-status', `Uploaded ${n} candidate roster entries to Firestore.`);
+    toast('Roster uploaded', `${n} candidates active in roster`, 'ok');
+  } catch (err) {
+    $('file-roster').value = '';
+    setText('roster-status', `Failed: ${err.message}`);
+    toast('Roster upload failed', err.message, 'danger');
+  }
+}
+
 async function releaseLock(key, statusId) {
   if (!/^[0-9a-f]{40}$/.test(key)) { setText(statusId, 'Identity keys are 40 hexadecimal characters.'); return; }
   if (!confirm('Release this identity lock? The candidate will be able to sign in from another device (not after a sealed submission).')) return;
@@ -689,6 +788,7 @@ function wire() {
   $('btn-export-json').addEventListener('click', exportJSON);
   $('file-questions').addEventListener('change', onSeedFile);
   $('file-key').addEventListener('change', onKeyFile);
+  $('file-roster').addEventListener('change', onRosterFile);
   $('btn-release').addEventListener('click', () => releaseLock($('in-identity').value.trim(), 'release-status'));
 
   $('btn-fx-close').addEventListener('click', () => { show('modal-forensic', false); fxCurrent = null; });

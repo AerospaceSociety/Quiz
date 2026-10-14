@@ -131,27 +131,46 @@ export async function fetchRoster(schoolUid) {
   }
 }
 
+/** Fetch a single candidate roster entry from roster/{identityKey} */
+export async function fetchRosterEntry(identityKey) {
+  if (!ready || !identityKey) return null;
+  try {
+    const snap = await fs.getDoc(d('roster', identityKey));
+    return snap.exists() ? snap.data() : null;
+  } catch (err) {
+    console.warn('[firebase] roster entry lookup:', err.message);
+    return null;
+  }
+}
+
 /**
  * Claims the identity lock for (schoolUid, teamId, name). One live device per
  * candidate, and no second sitting after a sealed submission.
- * @returns {{ ok: boolean, reason?: 'ACTIVE_ELSEWHERE'|'ALREADY_SUBMITTED' }}
+ * @returns {{ ok: boolean, reason?: 'ACTIVE_ELSEWHERE'|'ALREADY_SUBMITTED'|'NOT_ROSTERED' }}
  */
 export async function claimIdentity(key, profile) {
   if (!ready) return { ok: true };
   const uid = auth.currentUser.uid;
   const ref = d('identities', key);
-  return fs.runTransaction(db, async (tx) => {
-    const snap = await tx.get(ref);
-    if (snap.exists()) {
-      const cur = snap.data();
-      if (cur.state === 'sealed') return { ok: false, reason: 'ALREADY_SUBMITTED' };
-      if (cur.uid !== uid) return { ok: false, reason: 'ACTIVE_ELSEWHERE' };
-      tx.update(ref, { updatedAt: ts() });
-    } else {
-      tx.set(ref, { uid, state: 'active', ...profile, createdAt: ts(), updatedAt: ts() });
+  try {
+    return await fs.runTransaction(db, async (tx) => {
+      const snap = await tx.get(ref);
+      if (snap.exists()) {
+        const cur = snap.data();
+        if (cur.state === 'sealed') return { ok: false, reason: 'ALREADY_SUBMITTED' };
+        if (cur.uid !== uid) return { ok: false, reason: 'ACTIVE_ELSEWHERE' };
+        tx.update(ref, { updatedAt: ts() });
+      } else {
+        tx.set(ref, { uid, state: 'active', ...profile, createdAt: ts(), updatedAt: ts() });
+      }
+      return { ok: true };
+    });
+  } catch (err) {
+    if (err.code === 'permission-denied' || (err.message && err.message.toLowerCase().includes('permission'))) {
+      return { ok: false, reason: 'NOT_ROSTERED' };
     }
-    return { ok: true };
-  });
+    throw err;
+  }
 }
 
 /** The candidate's own live session doc — used to carry strikes across a reload or new tab. */
@@ -339,4 +358,30 @@ export async function loadAnswerKey() {
 export async function releaseIdentity(key) {
   if (!ready) throw new Error('Firebase is not configured.');
   await fs.deleteDoc(d('identities', key));
+}
+
+/** Admin-only: batch write candidate roster entries to roster/{identityKey} */
+export async function uploadRoster(entries) {
+  if (!ready) throw new Error('Firebase is not configured.');
+  let n = 0;
+  for (let i = 0; i < entries.length; i += 400) {
+    const batch = fs.writeBatch(db);
+    entries.slice(i, i + 400).forEach((entry) => {
+      batch.set(d('roster', entry.identityKey), {
+        identityKey: entry.identityKey,
+        schoolUid: entry.schoolUid,
+        teamId: entry.cleanTeamId || entry.teamId,
+        rawTeamId: entry.teamId || '',
+        name: entry.name,
+        normName: entry.normName || '',
+        memberId: entry.memberId || '',
+        division: entry.division || '',
+        createdAt: ts(),
+        updatedAt: ts()
+      });
+      n++;
+    });
+    await batch.commit();
+  }
+  return n;
 }

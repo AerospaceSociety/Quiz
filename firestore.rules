@@ -56,11 +56,18 @@ service cloud.firestore {
       allow list, write: if isAdmin();
     }
 
+    // ── Authoritative candidate roster: admin-managed, candidate may check their key ───
+    match /roster/{key} {
+      allow get: if signedIn();
+      allow list, write: if isAdmin();
+    }
+
     // ── Identity locks: one live device per candidate, no second sitting ────
     match /identities/{key} {
       allow get: if signedIn();
       allow list, delete: if isAdmin();
       allow create: if signedIn()
+        && exists(/databases/$(database)/documents/roster/$(key))
         && incoming().uid == request.auth.uid
         && incoming().state == 'active';
       allow update: if isAdmin()
@@ -111,7 +118,16 @@ service cloud.firestore {
     // ── Sealed submissions: create-once, immutable, invigilator-readable ─────
     match /submissions/{uid} {
       allow create: if isSelf(uid)
+        && !sealed(uid)
+        && released()
         && incoming().uid == uid
+        && incoming().identityKey is string
+        && exists(/databases/$(database)/documents/identities/$(incoming().identityKey))
+        && get(/databases/$(database)/documents/identities/$(incoming().identityKey)).data.uid == request.auth.uid
+        && get(/databases/$(database)/documents/identities/$(incoming().identityKey)).data.state != 'sealed'
+        && get(/databases/$(database)/documents/identities/$(incoming().identityKey)).data.schoolUid == incoming().candidate.schoolUid
+        && get(/databases/$(database)/documents/identities/$(incoming().identityKey)).data.teamId == incoming().candidate.teamId
+        && get(/databases/$(database)/documents/identities/$(incoming().identityKey)).data.name == incoming().candidate.name
         && incoming().keys().hasAll(['sessionId', 'candidate', 'items', 'checksum', 'salt', 'sealedAt'])
         && incoming().items is list && incoming().items.size() <= 200
         && incoming().checksum is string && incoming().checksum.size() == 64;
