@@ -35,8 +35,14 @@ let lastSample = 0;
 let mode = 'idle';          // idle | calibrate | exam
 let listener = null;        // calibration UI callback
 
+let lastGoodPose = null;
+let lastGoodPoseTime = 0;
+let nullMatrixSince = 0;
+const calibrationPoses = [];
+
 const tracker = {
   noFaceSince: 0,
+  missedFaceFrames: 0,
   multiSince: 0,
   gazeSince: 0,
   freezeSince: 0,
@@ -127,6 +133,10 @@ export function releaseMedia() {
   analyser = null;
   if (landmarker) { try { landmarker.close(); } catch (_) { /* no-op */ } }
   landmarker = null;
+  lastGoodPose = null;
+  lastGoodPoseTime = 0;
+  nullMatrixSince = 0;
+  calibrationPoses.length = 0;
 }
 
 /* --- 02 · MEDIAPIPE ------------------------------------------------------ */
@@ -207,21 +217,6 @@ function poseFromMatrix(m) {
   return { yaw: Math.atan2(fx, fz) * RAD, pitch: Math.asin(clamp(fy, -1, 1)) * RAD };
 }
 
-/** Landmark fallback: nose position between cheek contour (yaw) and between eye line and chin (pitch). */
-function poseFromLandmarks(lm) {
-  const nose = lm[1];
-  const left = lm[234];
-  const right = lm[454];
-  const eyeY = (lm[33].y + lm[263].y) / 2;
-  const chin = lm[152];
-  const yawRatio = (nose.x - left.x) / Math.max(1e-6, right.x - left.x);
-  const pitchRatio = (nose.y - eyeY) / Math.max(1e-6, chin.y - eyeY);
-  return {
-    yaw: Math.asin(clamp((yawRatio - 0.5) * 2, -1, 1)) * RAD,
-    pitch: -(pitchRatio - 0.42) * 120                     // rough degrees; only deltas vs. baseline are used
-  };
-}
-
 function micLevel() {
   if (!analyser) return 0;
   analyser.getFloatTimeDomainData(audioBuf);
@@ -251,15 +246,36 @@ function sample(ts) {
     faces = lms.length;
     if (faces >= 1) {
       const mats = res.facialTransformationMatrixes || [];
-      pose = mats[0] && mats[0].data ? poseFromMatrix(mats[0].data) : poseFromLandmarks(lms[0]);
+      if (mats[0] && mats[0].data) {
+        pose = poseFromMatrix(mats[0].data);
+        lastGoodPose = pose;
+        lastGoodPoseTime = ts;
+        nullMatrixSince = 0;
+      } else {
+        // Facial transform matrix missing: hold last good pose up to 3s
+        if (!nullMatrixSince) nullMatrixSince = ts;
+        if (lastGoodPose && (ts - lastGoodPoseTime <= 3000)) {
+          pose = lastGoodPose;
+        } else {
+          pose = null;
+        }
+      }
       let minX = 1, minY = 1, maxX = 0, maxY = 0;
       for (const p of lms[0]) {
         if (p.x < minX) minX = p.x; if (p.x > maxX) maxX = p.x;
         if (p.y < minY) minY = p.y; if (p.y > maxY) maxY = p.y;
       }
       box = { x: minX, y: minY, w: maxX - minX, h: maxY - minY };
+    } else {
+      nullMatrixSince = 0;
     }
   }
+
+  if (mode === 'calibrate' && pose) {
+    calibrationPoses.push(pose);
+    if (calibrationPoses.length > 20) calibrationPoses.shift();
+  }
+
   const level = micLevel();
   tracker.peakMic = Math.max(tracker.peakMic * 0.96, level);
   return { light, delta, videoAdvancing, faces, pose, box, level };
@@ -289,6 +305,22 @@ function calibrationReading(r) {
   };
 }
 
+/**
+ * Captures or averages the neutral head pose during calibration.
+ */
+export function calibrateNeutralPose() {
+  if (calibrationPoses.length > 0) {
+    const sumYaw = calibrationPoses.reduce((acc, p) => acc + p.yaw, 0);
+    const sumPitch = calibrationPoses.reduce((acc, p) => acc + p.pitch, 0);
+    return {
+      yaw: sumYaw / calibrationPoses.length,
+      pitch: sumPitch / calibrationPoses.length
+    };
+  }
+  const r = sample(performance.now());
+  return (r && r.pose) ? { yaw: r.pose.yaw, pitch: r.pose.pitch } : { yaw: 0, pitch: 0 };
+}
+
 /** Captures the reference photo, head pose and ambient noise floor. */
 export function captureBaseline() {
   const s = cfg().proctoring;
@@ -300,9 +332,10 @@ export function captureBaseline() {
   cap.height = s.frameHeight;
   const c = cap.getContext('2d');
   c.drawImage(video, 0, 0, cap.width, cap.height);
+  const neutralPose = r.pose || calibrateNeutralPose();
   S.baseline = {
     photo: cap.toDataURL('image/jpeg', 0.72),
-    pose: r.pose || { yaw: 0, pitch: 0 },
+    pose: neutralPose,
     noise: 0,
     light: { luma: Math.round(r.light.luma), contrast: Math.round(r.light.contrast) },
     camera: cameraLabel(),
@@ -315,7 +348,10 @@ export function captureBaseline() {
 export function startSurveillance() {
   mode = 'exam';
   listener = null;
-  Object.assign(tracker, { noFaceSince: 0, multiSince: 0, gazeSince: 0, freezeSince: 0, loudSince: 0 });
+  lastGoodPose = null;
+  lastGoodPoseTime = 0;
+  nullMatrixSince = 0;
+  Object.assign(tracker, { noFaceSince: 0, missedFaceFrames: 0, multiSince: 0, gazeSince: 0, freezeSince: 0, loudSince: 0 });
   startLoop();
 }
 
@@ -353,7 +389,15 @@ function evaluate(r, t) {
   }
 
   if (r.faces != null) {
-    if (since('noFaceSince', r.faces === 0) >= s.absenceSeconds) {
+    const reqMissed = s.consecutiveMissedFramesForAbsence || 3;
+    if (r.faces === 0) {
+      tracker.missedFaceFrames = (tracker.missedFaceFrames || 0) + 1;
+    } else {
+      tracker.missedFaceFrames = 0;
+    }
+
+    const absenceQualifies = r.faces === 0 && tracker.missedFaceFrames >= reqMissed;
+    if (since('noFaceSince', absenceQualifies) >= s.absenceSeconds) {
       flag('FACE_ABSENT', Level.ADVISORY, `Candidate not visible for over ${s.absenceSeconds}s`);
       tracker.noFaceSince = t;
     }
@@ -361,15 +405,20 @@ function evaluate(r, t) {
       flag('MULTIPLE_FACES', Level.STRIKE, `${r.faces} faces detected in frame`, { faces: r.faces });
       tracker.multiSince = t;
     }
-    if (r.pose && r.faces === 1) {
-      const base = (S.baseline && S.baseline.pose) || { yaw: 0, pitch: 0 };
-      const yaw = r.pose.yaw - base.yaw;
-      const pitch = r.pose.pitch - base.pitch;
-      const away = Math.abs(yaw) > s.yawLimitDeg || pitch < -s.pitchDownLimitDeg;
-      if (since('gazeSince', away) >= s.gazeSustainSeconds) {
-        const what = Math.abs(yaw) > s.yawLimitDeg ? `head turned ${Math.round(Math.abs(yaw))}°` : `looking down ${Math.round(-pitch)}°`;
-        flag('GAZE_EVASION', Level.ADVISORY, `Sustained gaze away from screen (${what})`, { yaw: Math.round(yaw), pitch: Math.round(pitch) });
-        tracker.gazeSince = t;
+    if (r.faces === 1) {
+      if (!r.pose) {
+        flag('POSE_UNKNOWN', Level.ADVISORY, 'Head pose indeterminate (facial transform unavailable for 3s+)');
+        tracker.gazeSince = 0;
+      } else {
+        const base = (S.baseline && S.baseline.pose) || { yaw: 0, pitch: 0 };
+        const yaw = r.pose.yaw - base.yaw;
+        const pitch = r.pose.pitch - base.pitch;
+        const away = Math.abs(yaw) > s.yawLimitDeg || pitch < -s.pitchDownLimitDeg;
+        if (since('gazeSince', away) >= s.gazeSustainSeconds) {
+          const what = Math.abs(yaw) > s.yawLimitDeg ? `head turned ${Math.round(Math.abs(yaw))}°` : `looking down ${Math.round(-pitch)}°`;
+          flag('GAZE_EVASION', Level.ADVISORY, `Sustained gaze away from screen (${what})`, { yaw: Math.round(yaw), pitch: Math.round(pitch) });
+          tracker.gazeSince = t;
+        }
       }
     } else {
       tracker.gazeSince = 0;

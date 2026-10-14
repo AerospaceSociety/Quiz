@@ -164,6 +164,7 @@ export function buildProtocol() {
   const s = cfg();
   const count = s.exam.itemsPerModule > 0 ? s.exam.itemsPerModule * s.modules.length : null;
   setText('paper-summary', `${Math.round(s.exam.durationSeconds / 60)} minutes · ${count ? `${count} questions` : 'full bank'} · ${s.modules.length} modules`);
+  setText('protocol-scratch-note', 'Scratch paper is allowed — keep your face visible in frame.');
   document.querySelectorAll('[data-cfg]').forEach((n) => {
     const v = n.dataset.cfg.split('.').reduce((o, k) => (o ? o[k] : undefined), s);
     if (v != null) n.textContent = String(v);
