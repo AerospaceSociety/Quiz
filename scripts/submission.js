@@ -64,6 +64,8 @@ export function sessionPatch() {
     currentQ: S.paper.length ? S.idx + 1 : 0,
     fullscreen: !!document.fullscreenElement,
     lastEvent: S.ledger.length ? S.ledger[S.ledger.length - 1].type : '',
+    consentVersion: (S.candidate && S.candidate.consentVersion) || (cfg().security ? cfg().security.consentVersion : '2026.1-DPDP-DRAFT'),
+    consentAt: (S.candidate && S.candidate.consentAt) || null,
     clientTs: now()
   };
 }

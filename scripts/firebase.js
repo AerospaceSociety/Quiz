@@ -402,6 +402,50 @@ export async function getAllForensics() {
   return rows;
 }
 
+/**
+ * Retention purge (DPDP Act 2023 compliance):
+ * Permanently deletes candidate baseline photos and incident thumbnails from forensics docs.
+ * Preserves candidate answers, scores, timestamps, event ledger, and checksums.
+ * @returns {Promise<number>} count of purged records
+ */
+export async function purgeForensicStills() {
+  if (!ready) throw new Error('Firebase is not configured.');
+  trackOp('read', 'forensics');
+  const snap = await fs.getDocs(fs.collection(db, 'forensics'));
+  trackOp('read', 'forensics', snap.size);
+  if (snap.empty) return 0;
+
+  const docsToUpdate = [];
+  snap.forEach((docSnap) => {
+    const data = docSnap.data();
+    const hasPhoto = data.baseline && typeof data.baseline === 'object' && data.baseline.photo;
+    const hasThumbs = Array.isArray(data.thumbs) && data.thumbs.length > 0;
+    if (hasPhoto || hasThumbs || !data.stillsPurgedAt) {
+      docsToUpdate.push({ ref: docSnap.ref, hasPhoto: !!hasPhoto });
+    }
+  });
+
+  let count = 0;
+  for (let i = 0; i < docsToUpdate.length; i += 400) {
+    const chunk = docsToUpdate.slice(i, i + 400);
+    const batch = fs.writeBatch(db);
+    for (const item of chunk) {
+      trackOp('write', 'forensics');
+      const patch = {
+        thumbs: [],
+        stillsPurgedAt: ts()
+      };
+      if (item.hasPhoto) {
+        patch['baseline.photo'] = fs.deleteField();
+      }
+      batch.update(item.ref, patch);
+      count++;
+    }
+    await batch.commit();
+  }
+  return count;
+}
+
 export async function getAllEvents() {
   if (!ready) return [];
   const snap = await fs.getDocs(fs.query(fs.collection(db, 'events'), fs.orderBy('ts', 'asc')));

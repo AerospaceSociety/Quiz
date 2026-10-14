@@ -194,6 +194,15 @@ async function onSignin(e) {
   const name = validateName();
   if (!rawSchoolUid || !rawTeamId || !name) return;
 
+  const consentBox = $('in-consent');
+  if (!consentBox || !consentBox.checked) {
+    view.signinError('You must review and accept the proctoring consent to authenticate.');
+    return;
+  }
+
+  const consentVersion = (settings.security && settings.security.consentVersion) || '2026.1-DPDP-DRAFT';
+  const consentAt = Date.now();
+
   const schoolUid = rawSchoolUid;
   const isIndividual = schoolUid.includes('-IND-');
 
@@ -224,7 +233,9 @@ async function onSignin(e) {
       teamId: cleanTeamId,
       memberId: memberId || '',
       name: roster.name,
-      isIndividual
+      isIndividual,
+      consentVersion,
+      consentAt
     }), 10000, 'Identity check');
 
     if (!claim.ok) {
@@ -259,7 +270,9 @@ async function onSignin(e) {
         division: division.code,
         schoolName: roster.schoolName,
         rosterVerified: roster.verified,
-        isIndividual
+        isIndividual,
+        consentVersion,
+        consentAt
       };
     }
     if (own && own.identityKey === identityKey) S.strikes = Math.max(S.strikes, Number(own.strikes) || 0);
@@ -284,6 +297,8 @@ function applySnapshot(snap) {
   S.salt = snap.salt;
   S.identityKey = snap.identityKey;
   S.candidate = { ...snap.candidate };
+  if (!S.candidate.consentVersion) S.candidate.consentVersion = (settings.security && settings.security.consentVersion) || '2026.1-DPDP-DRAFT';
+  if (!S.candidate.consentAt) S.candidate.consentAt = snap.savedAt || Date.now();
   S.strikes = snap.strikes || 0;
   S.advisories = { ...(snap.advisories || {}) };
   S.ledger = Array.isArray(snap.ledger) ? snap.ledger.slice() : [];
@@ -303,6 +318,7 @@ function showResumeCard(snap) {
     $('in-school-uid').value = snap.candidate.schoolUid;
     $('in-team-id').value = snap.candidate.memberId || snap.candidate.teamId;
     $('in-name').value = snap.candidate.name;
+    if ($('in-consent')) $('in-consent').checked = true;
     show('resume-card', false);
     show('form-signin', true);
     $('form-signin').requestSubmit();

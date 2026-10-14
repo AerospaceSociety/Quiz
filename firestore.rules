@@ -124,7 +124,8 @@ service cloud.firestore {
     // Writable by its owner only until the submission exists (the sealing batch
     // is evaluated against the pre-batch state, so it may still write here).
     match /forensics/{uid} {
-      allow create, update: if isSelf(uid) && !sealed(uid);
+      allow create: if isSelf(uid) && !sealed(uid);
+      allow update: if (isSelf(uid) && !sealed(uid)) || isAdmin();
       allow read, delete: if isAdmin();
     }
 

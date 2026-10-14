@@ -37,7 +37,9 @@
     "devtoolsTripwire": true,
     "devtoolsTripwireMs": 800,
     "devtoolsResizeThreshold": 160,
-    "warnOnUnload": true
+    "warnOnUnload": true,
+    "consentVersion": "2026.1-DPDP-DRAFT",
+    "retentionDays": 30
   },
   "proctoring": {
     "enabled": true,

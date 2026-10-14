@@ -691,6 +691,17 @@ async function releaseLock(key, statusId) {
   } catch (err) {
     setText(statusId, `Failed: ${err.message}`);
   }
+async function onPurgeStills() {
+  if (!confirm('Permanently purge forensic reference photos and incident thumbnails from all candidates? This is irreversible and complies with DPDP Act retention requirements. Candidate answers, scores, timestamps, event ledger, and checksums will NOT be affected.')) return;
+  setText('purge-status', 'Purging forensic stills…');
+  try {
+    const n = await fb.purgeForensicStills();
+    setText('purge-status', `Purged stills for ${n} candidate(s).`);
+    toast('Retention purge complete', `Purged stills for ${n} candidate(s)`, 'ok');
+  } catch (err) {
+    setText('purge-status', `Failed: ${err.message}`);
+    toast('Purge failed', err.message, 'danger');
+  }
 }
 
 /* --- 11 · WIRING ---------------------------------------------------------- */
@@ -791,6 +802,7 @@ function wire() {
   $('file-key').addEventListener('change', onKeyFile);
   $('file-roster').addEventListener('change', onRosterFile);
   $('btn-release').addEventListener('click', () => releaseLock($('in-identity').value.trim(), 'release-status'));
+  $('btn-purge-stills').addEventListener('click', onPurgeStills);
 
   $('btn-fx-close').addEventListener('click', () => { show('modal-forensic', false); fxCurrent = null; });
   $('modal-forensic').addEventListener('click', (e) => { if (e.target === $('modal-forensic')) $('btn-fx-close').click(); });
