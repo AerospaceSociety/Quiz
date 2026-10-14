@@ -278,15 +278,53 @@ export async function writeForensicsBaseline(data) {
 }
 
 /**
- * Atomic seal: forensics ledger, the immutable submission, the session's final
- * state and the identity lock flip in a single batch — all or nothing.
+ * Atomic seal: writes forensics best-effort, then commits the immutable
+ * submission, the session's final state and the identity lock atomically.
+ * Ensures the core submission doc write never fails due to forensics doc size.
+ * Handles double-seal idempotently if submissions/{uid} already exists.
  */
 export async function commitSubmission({ submission, forensics, session, identityKey }) {
   if (!ready || !auth.currentUser) throw new Error('firebase not ready');
   const uid = auth.currentUser.uid;
+
+  // Idempotency check: if submission already recorded, return true immediately
+  try {
+    const snap = await fs.getDoc(d('submissions', uid));
+    trackOp('read', 'submissions');
+    if (snap.exists()) {
+      console.info('[firebase] submission already exists, treating seal as successful');
+      return true;
+    }
+  } catch (_) {
+    // If check fails (e.g. offline), proceed to commit attempt
+  }
+
+  // Best-effort forensics write (committed independently so doc size never breaks core submission)
+  if (forensics) {
+    try {
+      trackOp('write', 'forensics');
+      await fs.setDoc(d('forensics', uid), { ...forensics, uid, updatedAt: ts() }, { merge: true });
+    } catch (fErr) {
+      console.warn('[firebase] forensics doc write failed, attempting trimmed forensics:', fErr.message);
+      try {
+        const trimmed = {
+          sessionId: forensics.sessionId,
+          checksum: forensics.checksum,
+          thumbs: [],
+          ledger: (forensics.ledger || []).filter((e) => e.level >= 2),
+          uid,
+          updatedAt: ts()
+        };
+        trackOp('write', 'forensics');
+        await fs.setDoc(d('forensics', uid), trimmed, { merge: true });
+      } catch (fErr2) {
+        console.warn('[firebase] trimmed forensics write failed; proceeding to core submission:', fErr2.message);
+      }
+    }
+  }
+
+  // Core submission batch: submission doc, final session state, and identity seal
   const batch = fs.writeBatch(db);
-  batch.set(d('forensics', uid), { ...forensics, uid, updatedAt: ts() }, { merge: true });
-  trackOp('write', 'forensics');
   batch.set(d('submissions', uid), { ...submission, uid, receivedAt: ts() });
   trackOp('write', 'submissions');
   batch.set(d('sessions', uid), { ...session, uid, heartbeatAt: ts() }, { merge: true });

@@ -177,14 +177,25 @@ function deviceInfo() {
   };
 }
 
-/** Keeps the forensic document under Firestore's 1 MiB document cap. */
-function fitForensics(doc) {
-  const limit = 900 * 1024;
+/** Keeps the forensic document under 500KB and caps at 8 thumbnails. */
+export function fitForensics(doc) {
+  const limit = 500 * 1024;
+  if (doc.thumbs && doc.thumbs.length > 8) {
+    doc.thumbs = doc.thumbs.slice(0, 8);
+  }
   let size = JSON.stringify(doc).length;
-  while (size > limit && doc.thumbs.length) { doc.thumbs.pop(); size = JSON.stringify(doc).length; }
-  if (size > limit) {
+  while (size > limit && doc.thumbs && doc.thumbs.length) {
+    doc.thumbs.pop();
+    size = JSON.stringify(doc).length;
+  }
+  if (size > limit && doc.ledger) {
     doc.ledger = doc.ledger.filter((e) => e.level > Level.INFO);
     doc.ledgerTruncated = true;
+    size = JSON.stringify(doc).length;
+  }
+  while (size > limit && doc.ledger && doc.ledger.length > 50) {
+    doc.ledger.pop();
+    size = JSON.stringify(doc).length;
   }
   return doc;
 }
@@ -241,11 +252,54 @@ function readOutbox() {
   try { return JSON.parse(localStorage.getItem(OUTBOX) || 'null'); } catch (_) { return null; }
 }
 
+export function prepareOutboxPackage(pkg) {
+  if (!pkg) return null;
+  return {
+    checksum: pkg.checksum,
+    submission: pkg.submission,
+    forensics: pkg.forensics ? {
+      ...pkg.forensics,
+      thumbs: [],
+      baseline: pkg.forensics.baseline ? {
+        ...pkg.forensics.baseline,
+        photo: undefined
+      } : null
+    } : null
+  };
+}
+
+export function minimalOutboxPackage(pkg) {
+  return {
+    checksum: pkg.checksum,
+    submission: pkg.submission,
+    forensics: {
+      sessionId: pkg.submission ? pkg.submission.sessionId : '',
+      checksum: pkg.checksum,
+      thumbs: [],
+      ledger: (pkg.forensics && Array.isArray(pkg.forensics.ledger))
+        ? pkg.forensics.ledger.filter((e) => e.level >= Level.STRIKE)
+        : []
+    }
+  };
+}
+
 function writeOutbox(v) {
+  if (!v) {
+    try { localStorage.removeItem(OUTBOX); } catch (_) {}
+    return;
+  }
   try {
-    if (v) localStorage.setItem(OUTBOX, JSON.stringify(v));
-    else localStorage.removeItem(OUTBOX);
-  } catch (_) { /* quota — the in-memory retry loop still runs */ }
+    const stripped = prepareOutboxPackage(v);
+    localStorage.setItem(OUTBOX, JSON.stringify(stripped));
+  } catch (err) {
+    console.warn('[submission] localStorage outbox quota exceeded, trying minimal outbox:', err.message);
+    try {
+      const minimal = minimalOutboxPackage(v);
+      localStorage.setItem(OUTBOX, JSON.stringify(minimal));
+    } catch (err2) {
+      console.warn('[submission] minimal localStorage outbox write failed:', err2.message);
+    }
+  }
 }
 
 async function commitToFirebase(pkg) {

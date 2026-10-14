@@ -152,7 +152,8 @@ function scoreSubmission(sub) {
 
 /** Recomputes SHA-256(salt | canonicalJSON(body)) from the stored record. */
 async function verifyChecksum(sub) {
-  const { checksum, checksumAlgo, uid, receivedAt, id, ...body } = sub;
+  if (!sub || !sub.checksum || !sub.salt) return false;
+  const { checksum, checksumAlgo, uid, receivedAt, updatedAt, id, ...body } = sub;
   const digest = await sha256Hex(`${sub.salt}|${canonicalJSON(body)}`);
   return digest === checksum;
 }
