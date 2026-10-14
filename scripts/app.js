@@ -508,7 +508,8 @@ async function onEnterExam() {
       getEndMs: computeEnd,
       warnAt: settings.exam.warnAtSeconds,
       critAt: settings.exam.criticalAtSeconds,
-      anomalyThresholdMs: settings.timer.anomalyThresholdMs,
+      freezeThresholdMs: settings.timer.freezeThresholdMs || 8000,
+      skewThresholdMs: settings.timer.skewThresholdMs || 3000,
       onTick: (left) => { view.paintClock(left); refreshStatus(); },
       onThreshold: (lvl) => (lvl === 'crit'
         ? toast('Five minutes remaining', 'The paper submits automatically at 00:00.', 'danger', 8000)
@@ -550,23 +551,39 @@ async function onEnterExam() {
 
 async function onClockAnomaly({ kind, ms }, setOffset) {
   if (S.stage !== Stage.EXAM || sealing) return;
-  if (kind === 'FREEZE' && unloadPromptWithin(ms + 1500)) {
-    recordIncident({ type: 'UNLOAD_ATTEMPT', level: Level.ADVISORY, message: `Attempted to close or reload the paper (dialog held ${Math.round(ms / 1000)} s)` });
+  if (kind === 'FREEZE') {
+    if (unloadPromptWithin(ms + 1500)) {
+      recordIncident({ type: 'UNLOAD_ATTEMPT', level: Level.ADVISORY, message: `Attempted to close or reload the paper (dialog held ${Math.round(ms / 1000)} s)` });
+      return;
+    }
+    // Freeze: threshold 8000ms, advisory only, NEVER auto-submit
+    recordIncident({
+      type: 'DEVICE_FREEZE',
+      level: Level.ADVISORY,
+      message: `Execution froze for ${(ms / 1000).toFixed(1)} s (browser throttle, backgrounding or system stall)`
+    });
+    toast('Execution paused', 'Device freeze detected. Note that countdown continues on the server clock.', 'warn', 5000);
     return;
   }
-  const message = kind === 'FREEZE'
-    ? `Execution froze for ${(ms / 1000).toFixed(1)} s (sleep, suspend or debugger)`
-    : `System clock changed by ${(ms / 1000).toFixed(1)} s during the paper`;
+
+  // Skew beyond tolerance after resync (start with 3s drift): strike. Never auto-submit.
+  let resynced = false;
   try {
-    const r = await syncServerClock();
-    if (r.source !== 'local-wallclock') { setOffset(r.offset); clock.setOffset(r.offset); }
+    const r = await syncServerClock(settings.timer.syncSamples || 3);
+    if (r.source !== 'local-wallclock') {
+      setOffset(r.offset);
+      clock.setOffset(r.offset);
+      resynced = true;
+    }
   } catch (_) { /* resync best-effort */ }
-  if (settings.timer.anomalyAction === 'submit') {
-    recordIncident({ type: 'CLOCK_ANOMALY', level: Level.INFO, message: `${message} — paper sealed automatically` });
-    seal('CLOCK_ANOMALY');
-  } else {
-    recordIncident({ type: 'CLOCK_ANOMALY', level: Level.STRIKE, message });
-  }
+
+  const skewSec = (Math.abs(ms) / 1000).toFixed(1);
+  recordIncident({
+    type: 'CLOCK_SKEW',
+    level: Level.STRIKE,
+    message: `System clock manipulated or drift exceeded tolerance (${skewSec} s${resynced ? ' — resynchronised with server' : ''})`
+  });
+  toast('Clock anomaly strike', 'System clock drift exceeded allowed tolerance.', 'danger', 6000);
 }
 
 /* --- 06 · STAGE 5 · SEAL -------------------------------------------------- */

@@ -22,8 +22,8 @@
   "timer": {
     "syncSamples": 3,
     "resyncSeconds": 300,
-    "anomalyThresholdMs": 5000,
-    "anomalyAction": "submit"
+    "freezeThresholdMs": 8000,
+    "skewThresholdMs": 3000
   },
   "security": {
     "maxStrikes": 3,

@@ -83,7 +83,8 @@ export function createExamClock(o) {
   let firedWarn = false;
   let firedCrit = false;
   let expired = false;
-  const threshold = o.anomalyThresholdMs || 5000;
+  const freezeThreshold = o.freezeThresholdMs || o.anomalyThresholdMs || 8000;
+  const skewThreshold = o.skewThresholdMs || 3000;
 
   const serverNow = () => monoNow() + offset;
 
@@ -99,11 +100,11 @@ export function createExamClock(o) {
     const now = monoNow();
     const gap = now - lastTick;
 
-    if (lastTick && gap > threshold && !hiddenDuringGap && !document.hidden) {
+    if (lastTick && gap > freezeThreshold && !hiddenDuringGap && !document.hidden) {
       o.onAnomaly && o.onAnomaly({ kind: 'FREEZE', ms: Math.round(gap) });
     }
     const wallDrift = (Date.now() - now) - wallBase;
-    if (Math.abs(wallDrift) > threshold) {
+    if (Math.abs(wallDrift) > skewThreshold) {
       wallBase = Date.now() - now;
       o.onAnomaly && o.onAnomaly({ kind: 'CLOCK_SKEW', ms: Math.round(wallDrift) });
     }
