@@ -168,7 +168,7 @@
     "enabled": true,
     "formId": "262450769915063",
     "submitUrl": "https://submit.jotform.com/submit/",
-    "webhookUrl": "",
+    "webhookUrl": "/api/submit",
     "fieldMap": {
       "schoolUid": "q12_schoolUid",
       "teamId": "q13_teamId",

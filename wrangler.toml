@@ -1,0 +1,9 @@
+name = "quizzitch-portal"
+compatibility_date = "2024-09-23"
+pages_build_output_dir = "."
+
+# Secrets to set via:
+#   npx wrangler pages secret put JOTFORM_API_KEY
+# Optional environment variables:
+# [vars]
+# FIREBASE_PROJECT_ID = "quizzitch-14998"

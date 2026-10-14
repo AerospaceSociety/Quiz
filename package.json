@@ -7,9 +7,9 @@
     "start": "serve . -l 8000",
     "deploy": "wrangler pages deploy .",
     "preview": "wrangler pages dev .",
-    "provision:jotform": "python scripts/provision_jotform.py",
-    "relay": "node scripts/relay.js",
-    "relay:py": "uvicorn scripts.webhook_relay:app --port 8080"
+    "pages:dev": "wrangler pages dev .",
+    "pages:deploy": "wrangler pages deploy .",
+    "provision:jotform": "python scripts/provision_jotform.py"
   },
   "keywords": [],
   "author": "AEROSS",
