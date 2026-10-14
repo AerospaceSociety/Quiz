@@ -207,15 +207,13 @@ Firebase is the system of record. To also mirror each submission into Jotform:
 
 Jotform sends no CORS headers, so the direct browser submission shows “Dispatched” with an opaque response.
 
-### Secure Webhook Relay (Recommended for proctored screening)
+### Secure Webhook Relay (Cloudflare Pages Function)
 For high-integrity screening, set `jotform.webhookUrl` to your relay endpoint. The client attaches:
 - `Authorization: Bearer <Firebase_ID_Token>` (cryptographically verified session JWT)
 - Full sealed package including strikes, forensics metadata, and the salted SHA-256 checksum
 
-An indigenous relay is built right into Quizzitch with zero external dependencies:
-- **On Vercel**: `api/submit.js` deploys automatically as a serverless function at `/api/submit`. Simply set `"webhookUrl": "/api/submit"` in `config/settings.json`.
-- **Local Node.js**: Run `npm run relay` (powered by `scripts/relay.js`).
-- **Python**: Run `npm run relay:py` (powered by `scripts/webhook_relay.py`).
+An indigenous zero-cost relay is built right into Quizzitch with zero external dependencies:
+- **Cloudflare Pages**: `functions/api/submit.js` deploys automatically as a serverless Pages Function at `/api/submit`. Simply set `"webhookUrl": "/api/submit"` in `config/settings.json`. Set `JOTFORM_API_KEY` and `FIREBASE_PROJECT_ID` as Cloudflare Pages environment variables.
 
 It gates every submission through:
 1. **Firebase JWT Verification**: Confirms identity and valid anonymous auth session via Google tokeninfo.
@@ -224,22 +222,28 @@ It gates every submission through:
 4. **Cryptographic Checksum Verification**: Recomputes `SHA-256(salt + "|" + canonicalJSON(body))` to ensure zero tampering in transit.
 5. **Private Jotform API Dispatch**: Forwards to `https://api.jotform.com/form/{formID}/submissions` using `JOTFORM_API_KEY`.
 
-To run the relay locally:
-```bash
-# Set your environment variables (see .env.example)
-export JOTFORM_API_KEY="your-api-key"
-export FIREBASE_PROJECT_ID="quizzitch-14998"
+---
 
-# Start the indigenous Node relay (port 8080)
-npm run relay
+## 8 · DPDP Act 2023 & Minor Consent Compliance
 
-# In config/settings.json, set:
-# "webhookUrl": "http://localhost:8080/api/submit"
-```
+In compliance with India's Digital Personal Data Protection (DPDP) Act 2023:
+1. **Candidate & Guardian Consent**: Mandatory checkbox on Stage 1 sign-in with explicit draft disclosures (on-device ML processing only, no continuous video recording, no microphone/audio monitoring, incident review stills only). `consentVersion` (`2026.1-DPDP-DRAFT`) and timestamp `consentAt` are bound to candidate identities, session patches, and sealed submission documents.
+2. **Forensic Stills Retention Cap**: Forensic documents are strictly capped at $\le$ 500KB and a maximum of 8 thumbnails.
+3. **Admin Stills Purge Tool**: Invigilators can invoke **Purge forensic stills** from the admin deck (*Question Bank & Tools* tab). This permanently deletes `baseline.photo` and clears `thumbs: []` across all candidate forensic records while preserving answers, scores, timestamps, violation event ledger, and cryptographic checksums for 30-day compliance.
 
 ---
 
-## 8 · Local development & deployment
+## 9 · Automated Test Suites
+
+Run all verification test suites locally without external dependencies:
+```bash
+npm test                # Runs quota simulation, seal robustness, and security rules
+npm run test:simulation # Validates Firestore Spark quota budget (30 candidates x 60 min <= 6,000 writes, <= 15,000 reads)
+npm run test:seal       # Validates fitForensics 500KB/8-thumb cap, fallback payloads, and double-seal idempotency
+npm run test:rules      # Validates 10 critical security rules scenarios against firestore.rules
+```
+
+## 10 · Local development & deployment
 
 ```bash
 npm install
@@ -251,14 +255,13 @@ fully offline and the receipt says “Rehearsal mode — not transmitted”.
 
 - **Cloudflare Pages**: `npm run deploy`. `_headers` applies the security headers; `.assetsignore` keeps
   `config/questions.json`, rules and tooling off the CDN.
-- **Vercel**: import the folder, no build command. `vercel.json` sets headers; `.vercelignore` excludes the bank.
 - **GitHub Pages**: works (the `<meta>` CSP applies), but it can't set `frame-ancestors`/HSTS headers and
   will publish `config/questions.json` unless you delete it from the published branch.
 
 Browser support: current Chrome / Edge (recommended — Keyboard Lock, best MediaPipe performance),
 Firefox. Safari desktop works with reduced shortcut capture. Phones and tablets are not supported.
 
-## 9 · Troubleshooting
+## 11 · Troubleshooting
 
 | Symptom | Fix |
 |---|---|
