@@ -3,24 +3,32 @@ node_modules/
 
 # Cloudflare Wrangler
 .wrangler/
+wrangler.toml
 wrangler.jsonc
 
-# Repo / tooling meta — never served
+# Functions runtime (compiled, not static assets)
+functions/
+
+# Repo / tooling meta — never served statically
 .git/
 .gitignore
 .assetsignore
-.vercelignore
-.claude/
+.env.example
 README.md
+DEPLOY.md
 package.json
 package-lock.json
-vercel.json
 firestore.rules
 quizzitch-legacy-backup.zip
+test/
+tests/
+
+# Python scripts and tooling
+scripts/*.py
+scripts/__pycache__/
 
 # The question bank is seeded into Firestore from the admin deck and must
-# never be publicly downloadable. (Remove this line only for offline rehearsals
-# with exam.questionSource = "local".)
+# never be publicly downloadable.
 config/questions.json
 
 # OS files
