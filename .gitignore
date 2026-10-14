@@ -4,3 +4,6 @@ node_modules/
 Thumbs.db
 quizzitch-legacy-backup.zip
 .claude/
+.env
+.env.local
+.dev.vars
