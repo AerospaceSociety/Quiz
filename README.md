@@ -135,6 +135,7 @@ Verdicts: `CLEAN` · `REVIEW` (advisories only) · `FLAGGED` (strikes) · `DISQU
   create-once, strikes can only go up, and invigilators re-verify every checksum.
 - **The checksum proves the record wasn't altered *after* sealing** (salt + canonical JSON, recomputed
   in the admin deck). It cannot prove the client was honest *before* sealing.
+- **Question bank exposure & residual risk:** Questions in `quizzitch_questions` are completely locked before release and require an active rostered candidate identity to read once released. The answer key is stored in `/answer_key` and is NEVER accessible to candidates under any circumstance. However, once the paper is released to an active candidate, question stems and options are delivered to the browser. A rogue candidate using a patched browser or memory inspector could dump question stems. Mitigation: The answer key never touches candidate devices, question orders are seeded/shuffled per candidate, and a stretch Cloudflare Worker endpoint (`/api/paper`) can serve items on-demand if per-item delivery is desired in future rounds.
 - **Vision flags are evidence for a human reviewer**, not automated verdicts. Lighting, glasses and
   webcam position move the numbers; tune thresholds in `settings.proctoring` after a rehearsal.
 

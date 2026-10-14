@@ -33,15 +33,27 @@ service cloud.firestore {
       allow list, write: if false;
     }
 
+    function hasActiveIdentity() {
+      return signedIn()
+        && !sealed(request.auth.uid)
+        && exists(/databases/$(database)/documents/sessions/$(request.auth.uid))
+        && exists(/databases/$(database)/documents/identities/$(get(/databases/$(database)/documents/sessions/$(request.auth.uid)).data.identityKey))
+        && get(/databases/$(database)/documents/identities/$(get(/databases/$(database)/documents/sessions/$(request.auth.uid)).data.identityKey)).data.uid == request.auth.uid
+        && get(/databases/$(database)/documents/identities/$(get(/databases/$(database)/documents/sessions/$(request.auth.uid)).data.identityKey)).data.state == 'active';
+    }
+
     // ── Paper release / end / extension ──────────────────────────────────────
     match /exam_control/{doc} {
       allow read: if signedIn();
       allow write: if isAdmin();
     }
 
-    // ── Question bank: unreadable until the invigilator releases the paper ──
+    // ── Question bank: unreadable until released AND caller has active identity ──
+    // Note: Answer key is stored separately in /answer_key and never accessible to candidates.
+    // Residual risk: an active candidate can dump the questions (stems/options, without answers)
+    // from browser memory/network once released.
     match /quizzitch_questions/{id} {
-      allow read: if isAdmin() || (signedIn() && released());
+      allow read: if isAdmin() || (released() && hasActiveIdentity());
       allow write: if isAdmin();
     }
 
