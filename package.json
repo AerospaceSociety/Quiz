@@ -2,6 +2,7 @@
   "name": "quizzitch-portal",
   "version": "1.0.0",
   "description": "Secure Assessment Portal - CelesteCon 2026",
+  "type": "module",
   "scripts": {
     "dev": "serve . -l 8000",
     "start": "serve . -l 8000",
@@ -9,6 +10,7 @@
     "preview": "wrangler pages dev .",
     "pages:dev": "wrangler pages dev .",
     "pages:deploy": "wrangler pages deploy .",
+    "test:simulation": "node test/simulate_quota.js",
     "provision:jotform": "python scripts/provision_jotform.py"
   },
   "keywords": [],

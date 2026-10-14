@@ -96,9 +96,10 @@ service cloud.firestore {
       allow delete: if isAdmin();
     }
 
-    // ── Live activity feed ───────────────────────────────────────────────────
+    // ── Live activity feed: deterministic doc ids ${uid}_${seq}, seq 0..79 ────
     match /events/{id} {
       allow create: if signedIn()
+        && id.matches('^' + request.auth.uid + '_([0-9]|[1-7][0-9])$')
         && incoming().uid == request.auth.uid
         && incoming().level in [0, 1, 2]
         && incoming().message is string && incoming().message.size() < 500

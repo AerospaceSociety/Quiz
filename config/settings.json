@@ -65,7 +65,7 @@
     "virtualCameraPattern": "obs|virtual|manycam|snap camera|xsplit|droidcam|epoccam|ndi|camtwist|vcam|iriun"
   },
   "telemetry": {
-    "heartbeatSeconds": 30,
+    "heartbeatSeconds": 60,
     "advisoryRateLimitSeconds": 60
   },
   "schemes": {

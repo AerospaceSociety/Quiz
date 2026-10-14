@@ -9,7 +9,7 @@
    ledger lines stay in memory and travel once, inside the final package.
    ========================================================================== */
 
-import { S, cfg, bus, EV, Stage, Level, now, answeredCount, markedCount, unansweredCount } from './session.js';
+import { S, cfg, bus, EV, Stage, Level, now, answeredCount, markedCount, unansweredCount, persist } from './session.js';
 import { responseItems, moduleProgress } from './engine.js';
 import * as fb from './firebase.js';
 import { sha256Hex, canonicalJSON, istStamp } from './util.js';
@@ -20,7 +20,29 @@ const LIVE_EVENTS = new Set(['SIGNED_IN', 'EXAM_STARTED', 'SESSION_RESUMED', 'SU
 let heartbeat = null;
 let pushTimer = null;
 let closed = false;          // set at seal: the sealing batch owns the final session write
-const lastEventByType = new Map();
+let eventSeq = 0;            // capped at 80 (0..79)
+let lastWrittenSessionDigest = '';
+const advisoryBuffer = [];
+const lastAdvisoryByType = new Map();
+
+function sessionDigest(p) {
+  return `${p.stage}|${p.status}|${p.strikes}|${p.advisories}|${p.answered}|${p.marked}|${p.currentQ}|${p.fullscreen}|${p.lastEvent}`;
+}
+
+async function sendEvent(doc) {
+  if (eventSeq >= 80) return;
+  const uid = S.uid || (fb.currentUser() && fb.currentUser().uid);
+  if (!uid) return;
+  const id = `${uid}_${eventSeq++}`;
+  await fb.writeEvent(id, doc);
+}
+
+export async function flushAdvisories() {
+  while (advisoryBuffer.length && eventSeq < 80) {
+    const adv = advisoryBuffer.shift();
+    await sendEvent(eventDoc(adv, null));
+  }
+}
 
 /* --- 01 · TELEMETRY ------------------------------------------------------- */
 export function sessionPatch() {
@@ -46,17 +68,35 @@ export function sessionPatch() {
   };
 }
 
-/** Coalesces bursts of state changes into one write. */
+/** Coalesces bursts of state changes into one write only if state actually changed. */
 export function pushSoon(delay = 2000) {
   if (closed || !heartbeat) return;
   clearTimeout(pushTimer);
-  pushTimer = setTimeout(() => { if (!closed) fb.writeSession(sessionPatch()); }, delay);
+  pushTimer = setTimeout(() => {
+    if (closed) return;
+    const p = sessionPatch();
+    const d = sessionDigest(p);
+    if (d !== lastWrittenSessionDigest) {
+      lastWrittenSessionDigest = d;
+      fb.writeSession(p);
+    }
+  }, delay);
 }
 
 export function startTelemetry() {
   if (heartbeat || closed) return;
-  fb.writeSession(sessionPatch());
-  heartbeat = setInterval(() => { if (!closed) fb.writeSession(sessionPatch()); }, cfg().telemetry.heartbeatSeconds * 1000);
+  const initial = sessionPatch();
+  lastWrittenSessionDigest = sessionDigest(initial);
+  fb.writeSession(initial);
+
+  heartbeat = setInterval(() => {
+    if (closed) return;
+    const p = sessionPatch();
+    lastWrittenSessionDigest = sessionDigest(p);
+    fb.writeSession(p);
+    flushAdvisories();
+  }, cfg().telemetry.heartbeatSeconds * 1000);
+
   bus.on(EV.STATUS, () => pushSoon(500));
   bus.on(EV.STAGE, () => pushSoon(0));
 }
@@ -88,20 +128,37 @@ function eventDoc(entry, thumb) {
 
 /**
  * Forwards ledger entries to the live admin feed:
- *   strikes always (with a thumbnail when one exists),
- *   advisories at most once per type per `advisoryRateLimitSeconds`,
+ *   strikes always (with a thumbnail when one exists, written immediately),
+ *   advisories buffered and deduped within 10s, flushed on heartbeat and seal,
  *   informational entries only for lifecycle milestones.
  */
 export function wireEventStream(getThumb) {
   bus.on(EV.INCIDENT, (entry) => {
-    if (entry.level === Level.INFO && !LIVE_EVENTS.has(entry.type)) return;
-    if (entry.level === Level.ADVISORY) {
-      const last = lastEventByType.get(entry.type) || 0;
-      if (entry.t - last < cfg().telemetry.advisoryRateLimitSeconds * 1000) return;
-      lastEventByType.set(entry.type, entry.t);
+    if (entry.level === Level.INFO) {
+      if (LIVE_EVENTS.has(entry.type)) {
+        sendEvent(eventDoc(entry, null));
+        pushSoon(200);
+      }
+      return;
     }
-    fb.pushEvent(eventDoc(entry, entry.level === Level.STRIKE ? getThumb() : null));
-    if (entry.level >= Level.ADVISORY) pushSoon();
+
+    if (entry.level === Level.ADVISORY) {
+      const last = lastAdvisoryByType.get(entry.type) || 0;
+      if (entry.t - last >= 10000) {
+        lastAdvisoryByType.set(entry.type, entry.t);
+        advisoryBuffer.push(entry);
+      }
+      pushSoon(2000);
+      return;
+    }
+
+    if (entry.level === Level.STRIKE) {
+      sendEvent(eventDoc(entry, getThumb ? getThumb() : null));
+      const p = sessionPatch();
+      lastWrittenSessionDigest = sessionDigest(p);
+      fb.writeSession(p);
+      persist();
+    }
   });
 }
 
@@ -192,6 +249,7 @@ function writeOutbox(v) {
 }
 
 async function commitToFirebase(pkg) {
+  try { await flushAdvisories(); } catch (_) { /* non-blocking */ }
   await fb.commitSubmission({
     submission: pkg.submission,
     forensics: pkg.forensics,
