@@ -19,7 +19,7 @@ Quizzitch now requires server-only Firebase credentials for candidate claims, te
 
 ### Step 1: Cloudflare Dashboard Build Settings
 In Cloudflare Dashboard $\to$ **Workers & Pages** $\to$ **quiz** $\to$ **Settings** $\to$ **Builds & deployments**:
-- **Build command**: `npm run build:static`
+- **Build command**: `npm run build` (or `npm run build:static`)
 - **Build output directory**: `dist`
 
 ### Step 2: Cloudflare Environment Variables
