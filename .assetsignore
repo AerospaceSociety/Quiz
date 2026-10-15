@@ -1,10 +1,13 @@
 # Node dependencies
 node_modules/
+dist/
 
 # Cloudflare Wrangler
 .wrangler/
 wrangler.toml
+wrangler.retention.toml
 wrangler.jsonc
+workers/
 
 # Functions runtime (compiled, not static assets)
 functions/
@@ -13,6 +16,12 @@ functions/
 .git/
 .gitignore
 .assetsignore
+.dev.vars
+.dev.vars.*
+.env
+.env.*
+*.service-account.json
+service-account*.json
 .env.example
 README.md
 DEPLOY.md
@@ -25,11 +34,14 @@ tests/
 
 # Python scripts and tooling
 scripts/*.py
+scripts/build-static.js
 scripts/__pycache__/
 
 # The question bank is seeded into Firestore from the admin deck and must
 # never be publicly downloadable.
 config/questions.json
+config/*.local.json
+config/settings.local.json
 
 # OS files
 .DS_Store

@@ -1,88 +1,98 @@
-# Cloudflare & Firebase Deployment Guide — Quizzitch
+# Cloudflare Pages and Firebase Deployment
 
-This document outlines deployment on **Cloudflare Pages** (Free Tier) and configuration of **Firebase** (Spark Free Plan) for the live screening event.
+Quizzitch now requires server-only Firebase credentials for candidate claims, telemetry, submission sealing, Jotform verification, and scheduled privacy purges. Do not deploy the old client-write Firestore rules or run a live quiz until all steps below are complete.
 
----
+## 1. Firebase setup
 
-## 1. Cloudflare Pages Deployment
-
-### Prerequisites
-- Cloudflare account (Free plan)
-- Node.js 18+ and `npm`
-
-### Deploy via Wrangler CLI
-1. Log in to Cloudflare:
-   ```bash
-   npx wrangler login
+1. Enable Firebase Anonymous Auth for candidates and Email/Password Auth for invigilators.
+2. Create the `admins/{uid}` allowlist documents for invigilators.
+3. Create a Google Cloud service account for the Pages Functions. Grant only the Firestore data role needed to read/write this project’s Firestore database. Download its JSON key locally; never commit it or put it in browser config.
+4. Immediately deploy `firestore.rules`:
+   ```powershell
+   npx firebase-tools deploy --only firestore:rules --project quizzitch-14998
    ```
-2. Set the private Jotform API key as an encrypted secret in Cloudflare Pages:
-   ```bash
-   npx wrangler pages secret put JOTFORM_API_KEY
-   # Enter your Jotform API key when prompted
-   ```
-3. Deploy the application:
-   ```bash
-   npm run deploy
-   # Or: npx wrangler pages deploy .
-   ```
-   Note your production URL: `https://quizzitch-portal.pages.dev` (or your custom domain).
+   The rules deny all candidate writes to identities, sessions, events, forensics, and submissions; those writes must pass through the authenticated Pages API.
+5. Seed the question bank and admin-only answer key from the Admin page. The source bank is excluded from static uploads, and `/config/questions.json` is explicitly blocked by a Pages Function. Candidate paper responses omit the server-held option permutation.
+6. Before making the quiz live, remove any legacy `updatedBy` field from `/exam_control/status`; candidates can read the public control document. Future control writes remove that field automatically.
 
-### Deploy via GitHub Integration (Alternative)
-1. In Cloudflare Dashboard $\to$ **Compute (Workers & Pages)** $\to$ **Create application** $\to$ **Pages** $\to$ **Connect to Git**.
-2. Select repository `Quizzitch`.
-3. Build Settings:
-   - Framework preset: `None`
-   - Build command: *(leave empty)*
-   - Build output directory: `.`
-4. Environment variables:
-   - Add `JOTFORM_API_KEY` under **Settings** $\to$ **Environment variables** (Encrypt).
+## 2. Pages configuration
 
----
+Set these Pages environment variables for Production and Preview. Use exact origins, comma-separated, with no wildcard:
 
-## 2. Firebase Console Configuration (Project `quizzitch-14998`)
+| Variable | Example |
+|---|---|
+| `FIREBASE_PROJECT_ID` | `your_firebase_project_id` |
+| `FIREBASE_API_KEY` | `your_firebase_api_key` (Web API key, injected during static build) |
+| `FIREBASE_AUTH_DOMAIN` | `your_project.firebaseapp.com` |
+| `FIREBASE_STORAGE_BUCKET` | `your_project.firebasestorage.app` |
+| `FIREBASE_MESSAGING_SENDER_ID` | `your_messaging_sender_id` |
+| `FIREBASE_APP_ID` | `your_firebase_web_app_id` |
+| `FIREBASE_MEASUREMENT_ID` | `your_measurement_id` |
+| `ALLOWED_ORIGINS` | `https://quiz.pages.dev,https://your-custom-domain.example` |
+| `JOTFORM_FORM_ID` | `262450769915063` |
+| `QUIZ_ITEMS_PER_MODULE` | `5` (must match `settings.json`) |
+| `QUIZ_MODULE_IDS` | `0,1,2,3` (must match `settings.modules[].id`) |
+| `QUIZ_SHUFFLE_QUESTIONS` | `true` |
+| `QUIZ_SHUFFLE_OPTIONS` | `true` |
+| `MAX_STRIKES` | `3` |
+| `RETENTION_DAYS` | `30` |
+| `CONSENT_VERSION` | `2026.1-DPDP-DRAFT` (must match `settings.security.consentVersion`) |
 
-### Step 1: Authorise Cloudflare Domain for Auth
-1. Go to **Firebase Console** $\to$ **Authentication** $\to$ **Settings** $\to$ **Authorized domains**.
-2. Click **Add domain**.
-3. Add your Cloudflare Pages domain (e.g. `quizzitch-portal.pages.dev`) and any custom domains used.
+Set these as encrypted Pages secrets (CLI prompts for each value):
 
-### Step 2: Restrict Firebase Web API Key (Google Cloud Console)
-1. Go to [Google Cloud Console Credentials](https://console.cloud.google.com/apis/credentials) for project `quizzitch-14998`.
-2. Locate the Browser API Key matching `FIREBASE_API_KEY_PLACEHOLDER`.
-3. Under **Application restrictions**, select **Websites** (HTTP referrers).
-4. Add website restrictions:
-   - `https://quizzitch-portal.pages.dev/*`
-   - `https://*.pages.dev/*` (if using preview deployments)
-   - `http://localhost:*` (for local development/testing)
-5. Under **API restrictions**, restrict key to:
-   - Identity Toolkit API
-   - Cloud Firestore API
-   - Token Service API
-
-### Step 3: Deploy Firestore Security Rules
-Deploy the hardened rules from the repository:
-```bash
-npx firebase-tools deploy --only firestore:rules --project quizzitch-14998
+```powershell
+npx wrangler pages secret put FIREBASE_SERVICE_ACCOUNT --project-name quiz
+npx wrangler pages secret put JOTFORM_API_KEY --project-name quiz
+npx wrangler pages secret put RETENTION_PURGE_TOKEN --project-name quiz
 ```
-Or paste the contents of `firestore.rules` into **Firestore** $\to$ **Rules** in the Firebase Console and click **Publish**.
 
-### Step 4: Rehearsal Environment
-- **DO NOT** conduct large student rehearsals on the production Firebase project on event day, as the Spark plan has a strict 20,000 writes/day quota.
-- For rehearsals, create a separate free Firebase project (e.g. `quizzitch-rehearsal`), enable Anonymous Auth and Firestore, and swap `settings.json` $\to$ `firebase` block.
-- Alternatively, run local rehearsals with `settings.json` $\to$ `exam.questionSource: "local"` and `firebase.enabled: false`.
+Paste the complete service-account JSON into the first prompt. Set `RETENTION_PURGE_TOKEN` to a long random secret; the same value is required by the scheduled Worker in the next section. For local Pages development, put only local values in the ignored `.dev.vars` file and include the exact development origin (for example `http://localhost:8788`) in `ALLOWED_ORIGINS`.
 
----
+Deploy Pages after configuring the variables and secrets:
 
-## 3. Public Asset Verification
+```powershell
+npm run deploy
+```
 
-When deployed, Cloudflare Pages will serve only:
-- Static HTML (`index.html`, `admin.html`)
-- Static assets (`styles/*`, `scripts/*.js`)
-- Public config (`config/settings.json`)
-- Media assets and favicon
+Confirm the production hostname and add it to Firebase Auth’s authorized domains. Restrict the Firebase browser API key to the production/custom domains and the required Firebase APIs. Do not allow broad `*.pages.dev` production origins unless preview access is intentionally needed.
 
-The following are strictly blocked by `.assetsignore` and **never** served:
-- `config/questions.json` (Seed questions via Admin dashboard; never publish bank file)
-- `functions/*` (Runs as Cloudflare Pages serverless runtime)
-- `firestore.rules`, `.env.example`, `DEPLOY.md`, `README.md`
-- Tooling scripts (`scripts/*.py`)
+## 3. Candidate roster migration
+
+1. In Admin → *Question Bank & Tools*, upload a roster CSV/JSON containing `schoolUid`, `teamId`, and `name` (optional `memberId`, `division`).
+2. The browser generates a random 128-bit code per candidate, stores only the code-derived identity key in Firestore, and downloads a CSV containing the codes.
+3. Distribute each code through a private channel and retain the CSV in access-controlled storage. Never post it with the public quiz link.
+4. Preserve the `claimCode` column when re-uploading. Every upload replaces the authoritative roster and deletes omitted access-code records; re-uploading without codes intentionally creates new credentials and identity keys. A candidate whose old code was already used may still have an identity lock, which an invigilator must release.
+5. Existing deterministic roster/identity records are not migrated automatically. Deploy the rules first, then upload the new code-based roster and review/delete obsolete roster and identity records in the Firebase Console after the event data is backed up.
+
+## 4. Scheduled still deletion
+
+The Admin **Purge forensic stills** button first records a purge marker, then clears baseline/reference photos and incident thumbnails from `forensics` and `events`. Connected candidate and admin pages clear their app-held stills, and the candidate API refuses to store new stills for that event. Browser storage is scrubbed on retry/outbox reads. The scheduled Worker applies the same marker before purging stale stills after the retention period. Copies previously exported, photographed, or retained outside the site cannot be recalled.
+
+Update `RETENTION_ENDPOINT` in `wrangler.retention.toml` if the Pages hostname is not `https://quiz.pages.dev`, then deploy the scheduler:
+
+```powershell
+npx wrangler login
+npx wrangler deploy --config wrangler.retention.toml
+npx wrangler secret put RETENTION_PURGE_TOKEN --config wrangler.retention.toml
+```
+
+Set the exact same token in the Pages secret and Worker secret. Verify the Cron Trigger is active in Cloudflare and inspect Worker logs after a scheduled run. Connected pages clear app-held stills; offline pages and screenshots, downloads, browser/OS backups, or records already exported elsewhere cannot be recalled.
+
+## 5. Verify before the live event
+
+Run local checks and a complete rehearsal in a separate Firebase project:
+
+```powershell
+npm test
+npm run preview -- --port 8788
+```
+
+The preview command stages only public files in `dist/`; it does not serve the repository root or the source question bank.
+
+Test correct and incorrect access codes, cross-account claim races, reload/resume, rejected direct Firestore writes, release/end/extension, normal and forced submission, Jotform failure/retry, event thumbnail purge, and the scheduled retention route. The repository tests include static policy checks; they are not a substitute for testing the deployed Firestore rules and Pages secrets against the Firebase Emulator or a rehearsal project.
+
+The browser-based MediaPipe/focus/fullscreen checks remain bypassable by a technically capable candidate, external devices, modified browser code, or virtual camera tools. The server validates identity, assigned-paper shape/order, one-time sealing, timing window, and telemetry bounds, but strike/verdict reports still originate in the candidate's browser and can be omitted or forged. Treat flags as review evidence, not proof of misconduct. Cloudflare, Firebase, and Jotform have separate quotas; verify current limits and expected usage before the event. Browser-only monitoring cannot guarantee a cheat-proof exam.
+
+The candidate and mirror APIs also apply per-user and `CF-Connecting-IP` rate caps in Worker memory. They are useful against accidental loops and basic single-source abuse, but are isolate-local and can reset or be bypassed by distributed traffic. They are not a hard global quota limit or a substitute for Cloudflare edge protections; rehearse peak concurrent use from the actual school network before the event.
+
+As checked 2026-10-15, free-tier reference quotas are 50,000 Firestore reads and 20,000 writes/day, 100,000 Cloudflare Workers/Pages Function requests/day, and 100 Jotform Starter submissions/month. The relay makes two Jotform API calls for each successful mirrored submission (field lookup and submission), but the monthly submission limit is likely the binding limit. These values can change and are shared with other account usage; confirm them in each account before a live event. Firestore remains authoritative if Jotform rejects a mirror.

@@ -1,9 +1,15 @@
 name = "quiz"
 compatibility_date = "2024-09-23"
-pages_build_output_dir = "."
+pages_build_output_dir = "dist"
 
-# Secrets to set via:
-#   npx wrangler pages secret put JOTFORM_API_KEY
-# Optional environment variables:
-# [vars]
-# FIREBASE_PROJECT_ID = "quizzitch-14998"
+[vars]
+FIREBASE_PROJECT_ID = "quizzitch-14998"
+ALLOWED_ORIGINS = "https://quiz.pages.dev"
+JOTFORM_FORM_ID = "262450769915063"
+QUIZ_ITEMS_PER_MODULE = "5"
+QUIZ_MODULE_IDS = "0,1,2,3"
+QUIZ_SHUFFLE_QUESTIONS = "true"
+QUIZ_SHUFFLE_OPTIONS = "true"
+MAX_STRIKES = "3"
+RETENTION_DAYS = "30"
+CONSENT_VERSION = "2026.1-DPDP-DRAFT"

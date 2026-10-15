@@ -17,13 +17,12 @@
 import * as fb from './firebase.js';
 import {
   $, h, mount, setText, show, sha256Hex, canonicalJSON, istStamp, istTime, mmss, pad,
-  downloadBlob, toCSV, deepFreeze, normName
+  downloadBlob, toCSV, deepFreeze, randomHex
 } from './util.js';
-import { identityKeyFor } from './submission.js';
 
 const OFFLINE_MS = 75000;
 const STATUS_ORDER = { flagged: 0, warning: 1, secure: 2, offline: 3, submitted: 4 };
-const STATUS_LABEL = { secure: 'Secure', warning: 'Warning', flagged: 'Flagged', submitted: 'Submitted', offline: 'Offline' };
+const STATUS_LABEL = { secure: 'No flags reported', warning: 'Advisory reported', flagged: 'Flags reported', submitted: 'Submitted', offline: 'Offline' };
 const STAGE_LABEL = { signin: 'Signing in', calibrate: 'Calibrating', protocol: 'Reading protocol', exam: 'In paper', sealed: 'Sealed' };
 const LEVEL_LABEL = ['Info', 'Advisory', 'Strike'];
 
@@ -36,6 +35,7 @@ let ticker = null;
 const sessions = new Map();
 const submissions = new Map();
 let events = [];
+let stillsPurgedAt = 0;
 const verified = new Map();          // uid → 'ok' | 'bad' | 'pending'
 const filters = { q: '', school: '', team: '', division: '', minStrikes: 0, status: '' };
 
@@ -46,6 +46,19 @@ function toast(title, body, kind = 'info', ttl = 4500) {
   host.appendChild(node);
   setTimeout(() => node.classList.add('is-leaving'), ttl);
   setTimeout(() => node.remove(), ttl + 400);
+}
+
+function safeStillSource(value) {
+  return typeof value === 'string' && /^data:image\/jpeg;base64,[A-Za-z0-9+/]+={0,2}$/.test(value) ? value : '';
+}
+
+function redactForensicsStills(record) {
+  if (!record) return record;
+  return {
+    ...record,
+    baseline: record.baseline ? { ...record.baseline, photo: undefined } : record.baseline,
+    thumbs: []
+  };
 }
 
 function view(name) {
@@ -153,9 +166,14 @@ function scoreSubmission(sub) {
 /** Recomputes SHA-256(salt | canonicalJSON(body)) from the stored record. */
 async function verifyChecksum(sub) {
   if (!sub || !sub.checksum || !sub.salt) return false;
-  const { checksum, checksumAlgo, uid, receivedAt, updatedAt, id, ...body } = sub;
+  const { checksum, checksumAlgo, receivedAt, updatedAt, id, clientReportedStrikes, clientReportedVerdict, serverAnswered, serverMarked, ...body } = sub;
+  if (body.v === 3 && Array.isArray(body.items)) {
+    body.items = body.items.map(({ original, ...item }) => item);
+  }
   const digest = await sha256Hex(`${sub.salt}|${canonicalJSON(body)}`);
-  return digest === checksum;
+  if (digest === checksum) return true;
+  delete body.uid;
+  return (await sha256Hex(`${sub.salt}|${canonicalJSON(body)}`)) === checksum;
 }
 
 function queueVerification() {
@@ -202,8 +220,8 @@ function card(r) {
     h('div', { class: 'ccard__foot' },
       h('span', null, r.stage === 'exam' ? `Q${pad(r.currentQ)} · ${r.fullscreen ? 'fullscreen' : 'WINDOWED'}` : STAGE_LABEL[r.stage] || r.stage),
       h('span', { class: 'ccard__flags' },
-        r.advisories ? h('span', { class: 'adv', title: 'Advisories' }, `▲${r.advisories}`) : null,
-        h('span', { class: 'pips', title: `${r.strikes} strike(s)` },
+        r.advisories ? h('span', { class: 'adv', title: 'Client-reported advisories' }, `▲${r.advisories}`) : null,
+        h('span', { class: 'pips', title: `${r.strikes} client-reported strike(s)` },
           Array.from({ length: settings.security.maxStrikes }, (_, i) => h('i', { class: i < r.strikes ? 'is-on' : '' }))))));
 }
 
@@ -228,7 +246,7 @@ function renderFeed() {
   h('span', { class: 'fe__level' }, e.level === 2 ? `STRIKE ${e.strikes || ''}`.trim() : LEVEL_LABEL[e.level] || 'Info'),
   h('span', { class: 'fe__who' }, `${String(e.schoolUid || '').replace('CLT-2026-SCH-', 'SCH-')} · ${e.name || '—'}`),
   h('span', { class: 'fe__msg' }, e.message || e.type),
-  e.thumb ? h('img', { class: 'fe__thumb', src: e.thumb, alt: `Still at ${e.type}` }) : null))
+  safeStillSource(e.thumb) ? h('img', { class: 'fe__thumb', src: safeStillSource(e.thumb), alt: `Still at ${e.type}` }) : null))
     : h('li', { class: 'empty' }, 'Waiting for events…'));
 }
 
@@ -278,7 +296,7 @@ function renderResults() {
     h('th', null, 'Candidate'), h('th', null, 'School UID'), h('th', null, 'Team'), h('th', null, 'Div'),
     h('th', { class: 'num' }, 'Answered'), h('th', { class: 'num' }, 'Score'),
     mods.map((m) => h('th', { class: 'num' }, m.letter)),
-    h('th', { class: 'num' }, 'Strikes'), h('th', null, 'Verdict'), h('th', null, 'Reason'), h('th', null, 'Sealed (IST)'), h('th', null, 'Checksum')));
+    h('th', { class: 'num' }, 'Reported strikes'), h('th', null, 'Reported verdict'), h('th', null, 'Reason'), h('th', null, 'Sealed (IST)'), h('th', null, 'Checksum')));
   const dup = duplicates();
   const list = resultRows();
   mount($('res-body'), list.length ? list.map(({ sub, score, v }) => h('tr', { class: 'clickable', onclick: () => openForensic(sub.uid || sub.id) },
@@ -289,10 +307,10 @@ function renderResults() {
     h('td', { class: 'num' }, `${sub.answered}/${sub.total}`),
     h('td', { class: 'num strong' }, score ? score.total : '—'),
     mods.map((m) => h('td', { class: 'num' }, score ? (score.modules[m.id] || 0) : '—')),
-    h('td', { class: `num${sub.strikes ? ' is-bad' : ''}` }, sub.strikes),
-    h('td', null, h('span', { class: `tag tag--${sub.verdict}` }, sub.verdict)),
+    h('td', { class: `num${(sub.clientReportedStrikes ?? sub.strikes) ? ' is-bad' : ''}` }, sub.clientReportedStrikes ?? sub.strikes),
+    h('td', null, h('span', { class: `tag tag--${sub.clientReportedVerdict || sub.verdict}` }, sub.clientReportedVerdict || sub.verdict)),
     h('td', { class: 'small' }, sub.reason),
-    h('td', { class: 'small' }, istStamp(sub.sealedAt).replace(' IST', '')),
+    h('td', { class: 'small' }, istStamp(sub.receivedAt || sub.sealedAt).replace(' IST', '')),
     h('td', null, h('span', { class: `tag tag--v-${v}` }, v === 'ok' ? 'Verified' : v === 'bad' ? 'MISMATCH' : '…'))))
     : h('tr', null, h('td', { colspan: 12 + mods.length, class: 'empty' }, 'No sealed submissions yet.')));
   renderStandings();
@@ -303,11 +321,12 @@ function standings() {
   const teams = new Map();
   submissions.forEach((sub) => {
     if (sub.candidate.division !== 'IPD') return;
+    if (verification(sub) !== 'ok') return;
     const t = teams.get(sub.candidate.teamId) || { teamId: sub.candidate.teamId, schoolUid: sub.candidate.schoolUid, members: 0, pooled: 0, strikes: 0 };
     const sc = scoreSubmission(sub);
     t.members += 1;
     t.pooled += sc ? sc.total : 0;
-    t.strikes += sub.strikes || 0;
+    t.strikes += sub.clientReportedStrikes ?? sub.strikes ?? 0;
     teams.set(t.teamId, t);
   });
   const list = [...teams.values()].sort((a, b) => b.pooled - a.pooled || a.strikes - b.strikes);
@@ -316,7 +335,7 @@ function standings() {
 
 function renderStandings() {
   const { list, div } = standings();
-  setText('standings-note', `Team score = sum of up to ${div.teamSize} members' scores. Top ${div.seedTop} seed into the national rounds. Ties break on fewer strikes.`);
+  setText('standings-note', `Team score = sum of up to ${div.teamSize} members' scores. Top ${div.seedTop} seed into the national rounds. Ties break on fewer reported strikes.`);
   mount($('standings-body'), list.length ? list.map((t, i) => h('tr', { class: i < div.seedTop && answerKey ? 'is-seed' : '' },
     h('td', { class: 'num' }, i + 1),
     h('td', { class: 'mono' }, t.teamId),
@@ -353,7 +372,7 @@ function timeline(ledger, durationSec) {
   ];
   const maxT = Math.max(durationSec, ...ledger.map((e) => e.elapsed || 0), 60);
   const x = (t) => L + ((W - L - R) * Math.min(t, maxT)) / maxT;
-  const root = svg('svg', { viewBox: `0 0 ${W} 160`, class: 'tl', role: 'img', 'aria-label': 'Audit timeline: responses, advisories and strikes over the paper' });
+  const root = svg('svg', { viewBox: `0 0 ${W} 160`, class: 'tl', role: 'img', 'aria-label': 'Client-reported audit timeline: responses, advisories and strikes over the paper' });
 
   lanes.forEach((ln) => {
     root.appendChild(svg('line', { x1: L, x2: W - R, y1: ln.y, y2: ln.y, class: 'tl__lane' }));
@@ -398,7 +417,7 @@ async function openForensic(uid) {
   const st = $('fx-status');
   st.dataset.state = r.status;
   st.textContent = STATUS_LABEL[r.status];
-  setText('fx-verdict', sub ? `${sub.verdict} · ${sub.reason}` : STAGE_LABEL[r.stage] || r.stage);
+  setText('fx-verdict', sub ? `Reported ${sub.clientReportedVerdict || sub.verdict} · ${sub.reason}` : STAGE_LABEL[r.stage] || r.stage);
   mount($('fx-timeline'), h('p', { class: 'muted' }, 'Loading forensic record…'));
   mount($('fx-stills'));
   mount($('fx-ledger'));
@@ -415,8 +434,8 @@ async function openForensic(uid) {
   mount($('fx-stats'),
     stat('Answered', `${r.answered}/${r.total || '—'}`),
     stat('Marked', sub ? sub.marked : (r.s && r.s.marked) || 0),
-    stat('Strikes', r.strikes),
-    stat('Advisories', r.advisories),
+    stat('Reported strikes', r.strikes),
+    stat('Reported advisories', r.advisories),
     stat('Elapsed', sub ? mmss(sub.elapsedSec) : '—'),
     stat('Score', score ? score.total : '—'),
     stat('Resumes', sub ? sub.resumes : '—'),
@@ -439,6 +458,7 @@ async function openForensic(uid) {
   let fx = null;
   try { fx = await fb.getForensics(uid); } catch (err) { toast('Forensics unavailable', err.message, 'warn'); }
   if (!fxCurrent || fxCurrent.uid !== uid) return;
+  if (fx && stillsPurgedAt && (fb.toMs(fx.updatedAt) || 0) <= stillsPurgedAt) fx = redactForensicsStills(fx);
   fxCurrent.fx = fx;
   const ledger = ledgerFor(uid, fx).slice().sort((a, b) => (a.elapsed || 0) - (b.elapsed || 0) || (a.seq || 0) - (b.seq || 0));
 
@@ -449,9 +469,12 @@ async function openForensic(uid) {
       h('li', null, h('i', { class: 'k k--strike' }), 'Strike')));
 
   const stills = [];
-  if (fx && fx.baseline && fx.baseline.photo) stills.push({ src: fx.baseline.photo, cap: 'Baseline reference', cls: 'is-baseline' });
+  if (fx && fx.baseline && safeStillSource(fx.baseline.photo)) stills.push({ src: safeStillSource(fx.baseline.photo), cap: 'Baseline reference', cls: 'is-baseline' });
   const thumbs = (fx && fx.thumbs && fx.thumbs.length) ? fx.thumbs : events.filter((e) => e.uid === uid && e.thumb).map((e) => ({ dataUrl: e.thumb, type: e.type, level: e.level, t: fb.toMs(e.ts) }));
-  thumbs.forEach((t) => stills.push({ src: t.dataUrl, cap: `${t.type}${t.t ? ` · ${istTime(t.t)}` : ''}`, cls: t.level === 2 ? 'is-strike' : 'is-adv' }));
+  thumbs.forEach((t) => {
+    const src = safeStillSource(t.dataUrl);
+    if (src) stills.push({ src, cap: `${t.type}${t.t ? ` · ${istTime(t.t)}` : ''}`, cls: t.level === 2 ? 'is-strike' : 'is-adv' });
+  });
   mount($('fx-stills'), stills.length
     ? stills.map((s) => h('figure', { class: `still ${s.cls}` }, h('img', { src: s.src, alt: s.cap }), h('figcaption', null, s.cap)))
     : h('p', { class: 'muted' }, 'No stills recorded.'));
@@ -469,8 +492,8 @@ const stamp = () => new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
 
 function exportCandidatesCSV() {
   const mods = settings.modules;
-  const header = ['Name', 'School UID', 'Team ID', 'Division', 'Live status', 'Stage', 'Answered', 'Total', 'Score',
-    ...mods.map((m) => `Module ${m.letter}`), 'Strikes', 'Advisories', 'Verdict', 'Reason', 'Sealed (IST)', 'Session', 'Checksum', 'Checksum verified', 'UID'];
+  const header = ['Name', 'School UID', 'Team ID', 'Division', 'Reported live status', 'Stage', 'Answered', 'Total', 'Score',
+    ...mods.map((m) => `Module ${m.letter}`), 'Reported strikes', 'Reported advisories', 'Reported verdict', 'Reason', 'Sealed (IST)', 'Session', 'Checksum', 'Checksum verified', 'UID'];
   const data = rows().map((r) => {
     const sc = scoreSubmission(r.sub);
     return [r.name, r.schoolUid, r.teamId, r.division, r.status, r.stage, r.answered, r.total, sc ? sc.total : '',
@@ -505,7 +528,7 @@ async function exportLogCSV() {
 }
 
 async function exportJSON() {
-  toast('Preparing full export', 'Downloading forensic records and event log…', 'info');
+  toast('Preparing export', 'Downloading forensic records and event log without still images…', 'info');
   try {
     const [forensics, allEvents] = await Promise.all([fb.getAllForensics(), fb.getAllEvents()]);
     const payload = {
@@ -514,8 +537,9 @@ async function exportJSON() {
       control,
       answerKeyLoaded: !!answerKey,
       candidates: rows().map((r) => ({ uid: r.uid, session: r.s, submission: r.sub, score: scoreSubmission(r.sub), checksumVerified: r.sub ? verification(r.sub) : null })),
-      forensics,
-      events: allEvents,
+      forensics: forensics.map(redactForensicsStills),
+      events: allEvents.map(({ thumb, ...event }) => event),
+      stillImagesOmitted: true,
       standings: standings().list
     };
     downloadBlob(new Blob([JSON.stringify(payload, (k, v) => (v && typeof v.toMillis === 'function' ? v.toMillis() : v), 2)], { type: 'application/json' }), `quizzitch-full-export-${stamp()}.json`);
@@ -536,27 +560,71 @@ async function readJSONFile(input) {
 function keyFromAny(data) {
   if (Array.isArray(data)) {
     const key = {};
-    data.forEach((q) => { if (q && q.id != null && Array.isArray(q.correct)) key[String(q.id)] = q.correct.map(Number); });
+    data.forEach((q) => { if (q && q.id != null && Array.isArray(q.correct)) key[String(q.id)] = q.correct.slice(); });
     return key;
   }
   if (data && typeof data === 'object') {
     const key = {};
-    Object.entries(data).forEach(([id, v]) => { if (Array.isArray(v)) key[id] = v.map(Number); });
+    Object.entries(data).forEach(([id, v]) => { if (Array.isArray(v)) key[id] = v.slice(); });
     return key;
   }
   return {};
 }
 
+function validateQuestionBank(data) {
+  if (!Array.isArray(data) || !data.length || data.length > 1000) throw new Error('Expected 1–1,000 questions.');
+  const moduleIds = new Set(settings.modules.map((module) => module.id));
+  const divisionCodes = new Set(settings.divisions.map((division) => division.code));
+  const schemeIds = new Set(Object.keys(settings.schemes));
+  const ids = new Set();
+  return data.map((question, index) => {
+    if (!question || typeof question !== 'object' || Array.isArray(question)) throw new Error(`Question ${index + 1} must be an object.`);
+    const id = String(question.id ?? '').trim();
+    const catId = Number(question.catId);
+    const scheme = question.scheme || 'standard';
+    if (!/^[A-Za-z0-9][A-Za-z0-9_-]{0,99}$/.test(id) || ids.has(id)) throw new Error(`Question ${index + 1} has an invalid or duplicate ID.`);
+    if (!Number.isSafeInteger(catId) || !moduleIds.has(catId)) throw new Error(`Question ${id} has an unknown module ID.`);
+    if (typeof scheme !== 'string' || !schemeIds.has(scheme)) throw new Error(`Question ${id} has an unknown scoring scheme.`);
+    if (typeof question.question !== 'string' || !question.question.trim() || question.question.length > 5000 || /data:image\//i.test(question.question)) throw new Error(`Question ${id} has invalid or oversized text.`);
+    if (!Array.isArray(question.options) || question.options.length < 2 || question.options.length > 26
+      || question.options.some((option) => typeof option !== 'string' || !option.trim() || option.length > 1000 || /data:image\//i.test(option))) {
+      throw new Error(`Question ${id} needs 2–26 non-empty options of at most 1,000 characters each.`);
+    }
+    if (question.supplement != null && (typeof question.supplement !== 'string' || question.supplement.length > 5000 || /data:image\//i.test(question.supplement))) {
+      throw new Error(`Question ${id} has an invalid supplement.`);
+    }
+    if (question.divisions != null && (!Array.isArray(question.divisions) || !question.divisions.length
+      || question.divisions.some((division) => !divisionCodes.has(division)))) {
+      throw new Error(`Question ${id} has invalid division restrictions.`);
+    }
+    if (Object.hasOwn(question, 'correct')) {
+      const correct = question.correct;
+      if (!Array.isArray(correct) || !correct.length || correct.some((answer) => !Number.isSafeInteger(answer) || answer < 0 || answer >= question.options.length)
+        || new Set(correct).size !== correct.length || (scheme !== 'multi' && correct.length !== 1)) {
+        throw new Error(`Question ${id} has an invalid answer key.`);
+      }
+    }
+    ids.add(id);
+    return {
+      id,
+      catId,
+      scheme,
+      question: question.question,
+      supplement: question.supplement || '',
+      options: question.options.slice(),
+      ...(question.divisions ? { divisions: question.divisions.slice() } : {})
+    };
+  });
+}
+
 async function onSeedFile() {
   try {
-    const data = await readJSONFile($('file-questions'));
-    if (!Array.isArray(data) || !data.length) throw new Error('Expected a non-empty JSON array of questions.');
-    const bad = data.filter((q) => !q || q.id == null || typeof q.question !== 'string' || !Array.isArray(q.options) || q.options.length < 2);
-    if (bad.length) throw new Error(`${bad.length} item(s) are missing id / question / options.`);
+    const source = await readJSONFile($('file-questions'));
+    const data = validateQuestionBank(source);
     if (!confirm(`Upload ${data.length} questions to Firestore? Existing documents with the same id are overwritten.`)) return;
     const n = await fb.seedQuestions(data);
     setText('seed-status', `Uploaded ${n} questions (answer fields stripped).`);
-    const key = keyFromAny(data);
+    const key = keyFromAny(source);
     if (Object.keys(key).length && confirm(`The file also contains ${Object.keys(key).length} answers. Save them as the invigilator-only answer key?`)) {
       await fb.saveAnswerKey(key);
       answerKey = deepFreeze(key);
@@ -612,28 +680,48 @@ async function parseRosterFile(file) {
       }
     }
   } else {
-    const lines = text.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
-    if (lines.length < 2) throw new Error('CSV must have a header row and at least one candidate row.');
-    const headers = lines[0].split(',').map((h) => h.trim().toLowerCase().replace(/^["']|["']$/g, ''));
+    const rows = [];
+    let row = [];
+    let cell = '';
+    let quoted = false;
+    for (let i = 0; i < text.length; i++) {
+      const char = text[i];
+      if (quoted && char === '"' && text[i + 1] === '"') { cell += '"'; i++; }
+      else if (char === '"') quoted = !quoted;
+      else if (!quoted && char === ',') { row.push(cell); cell = ''; }
+      else if (!quoted && (char === '\n' || char === '\r')) {
+        if (char === '\r' && text[i + 1] === '\n') i++;
+        row.push(cell); cell = '';
+        if (row.some((value) => value.trim())) rows.push(row);
+        row = [];
+      } else cell += char;
+    }
+    if (quoted) throw new Error('CSV contains an unterminated quoted value.');
+    row.push(cell);
+    if (row.some((value) => value.trim())) rows.push(row);
+    if (rows.length < 2) throw new Error('CSV must have a header row and at least one candidate row.');
+    const headers = rows[0].map((h) => h.trim().toLowerCase());
     const sIdx = headers.findIndex((h) => h.includes('school'));
     const tIdx = headers.findIndex((h) => h.includes('team'));
     const nIdx = headers.findIndex((h) => h.includes('name') || h.includes('candidate') || h.includes('student'));
     const mIdx = headers.findIndex((h) => h.includes('member'));
     const dIdx = headers.findIndex((h) => h.includes('division'));
+    const cIdx = headers.findIndex((h) => h.includes('claim') || h.includes('access'));
 
     if (sIdx === -1 || tIdx === -1 || nIdx === -1) {
       throw new Error('CSV header must contain "schoolUid", "teamId", and "name" columns.');
     }
 
-    for (let i = 1; i < lines.length; i++) {
-      const cols = lines[i].split(',').map((c) => c.trim().replace(/^["']|["']$/g, ''));
+    for (let i = 1; i < rows.length; i++) {
+      const cols = rows[i].map((c) => c.trim());
       if (cols.length <= Math.max(sIdx, tIdx, nIdx)) continue;
       rawList.push({
         schoolUid: cols[sIdx],
         teamId: cols[tIdx],
         name: cols[nIdx],
         memberId: mIdx !== -1 ? cols[mIdx] : '',
-        division: dIdx !== -1 ? cols[dIdx] : ''
+        division: dIdx !== -1 ? cols[dIdx] : '',
+        claimCode: cIdx !== -1 ? cols[cIdx] : ''
       });
     }
   }
@@ -641,20 +729,33 @@ async function parseRosterFile(file) {
   const entries = [];
   for (const item of rawList) {
     if (!item.schoolUid || !item.teamId || !item.name) continue;
-    const cleanTeamId = item.teamId.replace(/-M\d{1,2}$/i, '');
-    const normalizedName = normName(item.name);
-    const key = await identityKeyFor(item.schoolUid.trim(), cleanTeamId, normalizedName);
+    const schoolUid = String(item.schoolUid).normalize('NFKC').trim().toUpperCase();
+    const teamId = String(item.teamId).normalize('NFKC').trim().toUpperCase();
+    const candidateName = String(item.name).normalize('NFKC').trim().replace(/\s+/g, ' ');
+    const cleanTeamId = teamId.replace(/-M\d{1,2}$/i, '');
+    if (!new RegExp(settings.registry.schoolUidPattern, 'i').test(schoolUid)) throw new Error(`Invalid school UID: ${schoolUid}`);
+    if (!new RegExp(settings.registry.teamIdPattern, 'i').test(teamId)) throw new Error(`Invalid team ID: ${teamId}`);
+    if (candidateName.length < settings.registry.minNameLength || candidateName.length > 80 || !/^[\p{L}][\p{L}\p{M} .'-]*$/u.test(candidateName)) throw new Error(`Invalid candidate name: ${candidateName}`);
+    const claimCode = String(item.claimCode || randomHex(16)).trim().toLowerCase();
+    if (!/^[0-9a-f]{32}$/.test(claimCode)) throw new Error(`Invalid 32-character access code for ${item.name}.`);
+    const rosterKey = (await sha256Hex(`quizzitch-roster-claim-v1|${claimCode}`)).slice(0, 40);
+    const memberId = String(item.memberId || '').trim().toUpperCase();
+    if (memberId.length > 80 || !/^[A-Z0-9-]*$/.test(memberId)) throw new Error(`Invalid member ID for ${item.name}.`);
+    const identityKey = (await sha256Hex(`quizzitch-candidate-identity-v1|${JSON.stringify([schoolUid.toLocaleLowerCase('en-US'), teamId.toLocaleLowerCase('en-US'), candidateName.toLocaleLowerCase('en-US'), memberId])}`)).slice(0, 40);
     entries.push({
-      identityKey: key,
-      schoolUid: item.schoolUid.trim(),
-      teamId: item.teamId.trim(),
+      identityKey,
+      rosterKey,
+      claimCode,
+      schoolUid,
+      teamId,
       cleanTeamId,
-      name: item.name.trim(),
-      normName: normalizedName,
-      memberId: (item.memberId || '').trim(),
-      division: (item.division || '').trim()
+      name: candidateName,
+      memberId,
+      division: String(item.division || '').trim().toUpperCase()
     });
   }
+  if (new Set(entries.map((entry) => entry.rosterKey)).size !== entries.length) throw new Error('Roster contains duplicate access codes.');
+  if (new Set(entries.map((entry) => entry.identityKey)).size !== entries.length) throw new Error('Roster contains duplicate candidate identities.');
   return entries;
 }
 
@@ -665,14 +766,16 @@ async function onRosterFile() {
   try {
     const entries = await parseRosterFile(file);
     if (!entries.length) throw new Error('No valid candidate records found in file.');
-    if (!confirm(`Upload ${entries.length} candidates to the authoritative roster? Existing entries with the same identity key will be updated.`)) {
+    if (!confirm(`Upload ${entries.length} candidates? Existing access codes are preserved only when the input includes a valid claimCode column; otherwise new codes will be generated.`)) {
       $('file-roster').value = '';
       setText('roster-status', 'Cancelled.');
       return;
     }
+    const codesCsv = new Blob([`\uFEFF${toCSV(entries.map(({ schoolUid, teamId, name, memberId, division, claimCode }) => ({ schoolUid, teamId, name, memberId, division, claimCode })))}`], { type: 'text/csv;charset=utf-8' });
+    downloadBlob(codesCsv, 'quizzitch-roster-access-codes.csv');
     const n = await fb.uploadRoster(entries);
     $('file-roster').value = '';
-    setText('roster-status', `Uploaded ${n} candidate roster entries to Firestore.`);
+    setText('roster-status', `Uploaded ${n} candidates. A private access-code CSV was downloaded; distribute each code securely and keep a protected backup.`);
     toast('Roster uploaded', `${n} candidates active in roster`, 'ok');
   } catch (err) {
     $('file-roster').value = '';
@@ -691,13 +794,21 @@ async function releaseLock(key, statusId) {
   } catch (err) {
     setText(statusId, `Failed: ${err.message}`);
   }
+}
+
 async function onPurgeStills() {
-  if (!confirm('Permanently purge forensic reference photos and incident thumbnails from all candidates? This is irreversible and complies with DPDP Act retention requirements. Candidate answers, scores, timestamps, event ledger, and checksums will NOT be affected.')) return;
+  if (!confirm('Permanently purge stored baseline photos and incident thumbnails, clear stills held by connected candidate pages, and prevent this event from storing new stills? Candidate answers and event text remain. Exported, photographed, or OS/browser-backup copies cannot be recalled.')) return;
   setText('purge-status', 'Purging forensic stills…');
   try {
     const n = await fb.purgeForensicStills();
-    setText('purge-status', `Purged stills for ${n} candidate(s).`);
-    toast('Retention purge complete', `Purged stills for ${n} candidate(s)`, 'ok');
+    events = events.map(({ thumb, ...event }) => event);
+    renderFeed();
+    if (fxCurrent) {
+      fxCurrent.fx = redactForensicsStills(fxCurrent.fx);
+      mount($('fx-stills'), h('p', { class: 'muted' }, 'No stills recorded.'));
+    }
+    setText('purge-status', `Purged still images from ${n} Firestore record(s).`);
+    toast('Retention purge complete', `Cleared still images from ${n} Firestore record(s)`, 'ok');
   } catch (err) {
     setText('purge-status', `Failed: ${err.message}`);
     toast('Purge failed', err.message, 'danger');
@@ -714,6 +825,21 @@ function renderAll() {
 
 function subscribe() {
   unsubs.push(fb.watchControl((c) => { control = c; paintControl(); }));
+  unsubs.push(fb.watchStillsPurge((marker) => {
+    const purgeAt = marker && (fb.toMs(marker.updatedAt) || Number(marker.updatedAt)) || 0;
+    if (!purgeAt || purgeAt < stillsPurgedAt) return;
+    stillsPurgedAt = purgeAt;
+    events = events.map((event) => {
+      if (!event.thumb || (fb.toMs(event.ts) || 0) > purgeAt) return event;
+      const { thumb, ...redacted } = event;
+      return redacted;
+    });
+    if (fxCurrent && (fb.toMs(fxCurrent.fx?.updatedAt) || 0) <= purgeAt) {
+      fxCurrent.fx = redactForensicsStills(fxCurrent.fx);
+      mount($('fx-stills'), h('p', { class: 'muted' }, 'No stills recorded.'));
+    }
+    renderFeed();
+  }));
   unsubs.push(fb.watchSessions((list) => {
     sessions.clear();
     list.forEach((s) => sessions.set(s.id, s));
@@ -757,22 +883,21 @@ function wire() {
   $('btn-signout').addEventListener('click', () => fb.signOutUser());
   $('btn-denied-signout').addEventListener('click', () => fb.signOutUser());
 
-  const email = () => (me && me.email) || '';
   $('btn-ctl-start').addEventListener('click', () => {
     if (!confirm(`Release paper ${settings.meta.paperId} to every waiting candidate now? The ${Math.round(settings.exam.durationSeconds / 60)}-minute window starts on the server clock.`)) return;
-    command(() => fb.setControl({ status: 'active', restart: true, durationSeconds: settings.exam.durationSeconds, paperId: settings.meta.paperId }, email()), 'Paper released.');
+    command(() => fb.setControl({ status: 'active', restart: true, durationSeconds: settings.exam.durationSeconds, paperId: settings.meta.paperId }), 'Paper released.');
   });
   $('btn-ctl-extend').addEventListener('click', () => {
     if (!confirm('Extend the examination window by 5 minutes for all candidates?')) return;
-    command(() => fb.extendControl(300, email()), 'Window extended by 5 minutes.');
+    command(() => fb.extendControl(300), 'Window extended by 5 minutes.');
   });
   $('btn-ctl-end').addEventListener('click', () => {
     if (!confirm('END the paper now? Every candidate still writing is force-submitted.')) return;
-    command(() => fb.setControl({ status: 'ended' }, email()), 'Paper ended.');
+    command(() => fb.setControl({ status: 'ended' }), 'Paper ended.');
   });
   $('btn-ctl-reset').addEventListener('click', () => {
     if (!confirm('Reset control to WAITING? Candidates who have not entered will be held at the protocol screen.')) return;
-    command(() => fb.setControl({ status: 'waiting' }, email()), 'Control reset to waiting.');
+    command(() => fb.setControl({ status: 'waiting' }), 'Control reset to waiting.');
   });
 
   document.querySelectorAll('.dtab').forEach((b) => b.addEventListener('click', () => {
@@ -810,18 +935,38 @@ function wire() {
   $('btn-fx-json').addEventListener('click', () => {
     if (!fxCurrent) return;
     const { r, fx } = fxCurrent;
-    downloadBlob(new Blob([JSON.stringify({ session: r.s, submission: r.sub, forensics: fx, score: scoreSubmission(r.sub) }, (k, v) => (v && typeof v.toMillis === 'function' ? v.toMillis() : v), 2)], { type: 'application/json' }),
+    downloadBlob(new Blob([JSON.stringify({ session: r.s, submission: r.sub, forensics: redactForensicsStills(fx), stillImagesOmitted: true, score: scoreSubmission(r.sub) }, (k, v) => (v && typeof v.toMillis === 'function' ? v.toMillis() : v), 2)], { type: 'application/json' }),
       `quizzitch-record-${r.schoolUid}-${r.teamId}-${r.uid.slice(0, 8)}.json`);
   });
   $('btn-fx-release').addEventListener('click', () => fxCurrent && releaseLock(fxCurrent.r.identityKey, 'fx-verify'));
 }
 
 /* --- 12 · BOOT ------------------------------------------------------------ */
+function deepMerge(target, source) {
+  const out = { ...target };
+  for (const [k, v] of Object.entries(source || {})) {
+    if (v && typeof v === 'object' && !Array.isArray(v)) {
+      out[k] = deepMerge(out[k] || {}, v);
+    } else {
+      out[k] = v;
+    }
+  }
+  return out;
+}
+
 async function boot() {
   try {
     const res = await fetch('config/settings.json', { cache: 'no-store' });
     if (!res.ok) throw new Error(`config/settings.json → HTTP ${res.status}`);
-    settings = deepFreeze(await res.json());
+    let loaded = await res.json();
+    try {
+      const localRes = await fetch('config/settings.local.json', { cache: 'no-store' });
+      if (localRes.ok) {
+        const local = await localRes.json();
+        if (local && typeof local === 'object') loaded = deepMerge(loaded, local);
+      }
+    } catch (_) {}
+    settings = deepFreeze(loaded);
   } catch (err) {
     bootError('Configuration unavailable', err.message);
     return;

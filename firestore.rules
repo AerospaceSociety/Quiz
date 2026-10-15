@@ -19,27 +19,10 @@ service cloud.firestore {
     function isAdmin() {
       return signedIn() && exists(/databases/$(database)/documents/admins/$(request.auth.uid));
     }
-    function released() {
-      return get(/databases/$(database)/documents/exam_control/status).data.status == 'active';
-    }
-    function sealed(uid) {
-      return exists(/databases/$(database)/documents/submissions/$(uid));
-    }
-    function incoming() { return request.resource.data; }
-
     // ── Invigilator allowlist ────────────────────────────────────────────────
     match /admins/{uid} {
       allow get: if isSelf(uid);
       allow list, write: if false;
-    }
-
-    function hasActiveIdentity() {
-      return signedIn()
-        && !sealed(request.auth.uid)
-        && exists(/databases/$(database)/documents/sessions/$(request.auth.uid))
-        && exists(/databases/$(database)/documents/identities/$(get(/databases/$(database)/documents/sessions/$(request.auth.uid)).data.identityKey))
-        && get(/databases/$(database)/documents/identities/$(get(/databases/$(database)/documents/sessions/$(request.auth.uid)).data.identityKey)).data.uid == request.auth.uid
-        && get(/databases/$(database)/documents/identities/$(get(/databases/$(database)/documents/sessions/$(request.auth.uid)).data.identityKey)).data.state == 'active';
     }
 
     // ── Paper release / end / extension ──────────────────────────────────────
@@ -48,12 +31,9 @@ service cloud.firestore {
       allow write: if isAdmin();
     }
 
-    // ── Question bank: unreadable until released AND caller has active identity ──
-    // Note: Answer key is stored separately in /answer_key and never accessible to candidates.
-    // Residual risk: an active candidate can dump the questions (stems/options, without answers)
-    // from browser memory/network once released.
+    // ── Question bank: only the Pages API returns a candidate's assigned paper ──
     match /quizzitch_questions/{id} {
-      allow read: if isAdmin() || (released() && hasActiveIdentity());
+      allow read: if isAdmin();
       allow write: if isAdmin();
     }
 
@@ -62,91 +42,66 @@ service cloud.firestore {
       allow read, write: if isAdmin();
     }
 
-    // ── Registration rosters: a candidate may fetch one school by exact id ───
+    // ── Registration records: private to invigilators ────────────────────────
     match /registrations/{schoolUid} {
-      allow get: if signedIn();
-      allow list, write: if isAdmin();
+      allow get, list: if isAdmin();
+      allow write: if isAdmin();
     }
 
-    // ── Authoritative candidate roster: admin-managed, candidate may check their key ───
+    // ── Authoritative roster: candidate claims are validated by the Pages API ─
     match /roster/{key} {
-      allow get: if signedIn();
-      allow list, write: if isAdmin();
+      allow read, write: if isAdmin();
     }
 
-    // ── Identity locks: one live device per candidate, no second sitting ────
+    match /candidate_claims/{uid} {
+      allow read, write: if isAdmin();
+    }
+
+    match /candidate_papers/{uid} {
+      allow read, write: if isAdmin();
+    }
+
+    match /privacy_controls/{doc} {
+      allow get: if signedIn() && doc == 'stills';
+      allow list: if false;
+      allow write: if isAdmin();
+    }
+
+    // ── Identity locks: all candidate changes go through the authenticated API ─
     match /identities/{key} {
-      allow get: if signedIn();
+      allow get: if isAdmin() || (signedIn() && resource.data.uid == request.auth.uid);
       allow list, delete: if isAdmin();
-      allow create: if signedIn()
-        && exists(/databases/$(database)/documents/roster/$(key))
-        && incoming().uid == request.auth.uid
-        && incoming().state == 'active';
-      allow update: if isAdmin()
-        || (signedIn()
-            && resource.data.uid == request.auth.uid
-            && resource.data.state != 'sealed'
-            && incoming().uid == request.auth.uid
-            && incoming().state in ['active', 'sealed']);
+      allow create, update: if isAdmin();
     }
 
     // ── Clock handshake scratch document ─────────────────────────────────────
     match /time_sync/{uid} {
-      allow read, write: if isSelf(uid);
+      allow read, write: if false;
     }
 
-    // ── Live session state (heartbeat) ───────────────────────────────────────
-    // Strikes can only go up for the same identity, and a submitted session is frozen.
+    // ── Live session state: candidate writes are validated by the Pages API ──
     match /sessions/{uid} {
       allow read: if isSelf(uid) || isAdmin();
-      allow create: if isSelf(uid) && incoming().uid == uid;
-      allow update: if isSelf(uid)
-        && incoming().uid == uid
-        && resource.data.get('status', '') != 'submitted'
-        && (incoming().get('identityKey', '') != resource.data.get('identityKey', '')
-            || incoming().get('strikes', 0) >= resource.data.get('strikes', 0));
-      allow delete: if isAdmin();
+      allow write: if isAdmin();
     }
 
     // ── Live activity feed: deterministic doc ids ${uid}_${seq}, seq 0..79 ────
     match /events/{id} {
-      allow create: if signedIn()
-        && id.matches('^' + request.auth.uid + '_([0-9]|[1-7][0-9])$')
-        && incoming().uid == request.auth.uid
-        && incoming().level in [0, 1, 2]
-        && incoming().message is string && incoming().message.size() < 500
-        && (!('thumb' in incoming()) || (incoming().thumb is string && incoming().thumb.size() < 40000));
       allow read, delete: if isAdmin();
-      allow update: if false;
+      allow create, update: if isAdmin();
     }
 
     // ── Forensic record: baseline, stills, full ledger ───────────────────────
-    // Writable by its owner only until the submission exists (the sealing batch
-    // is evaluated against the pre-batch state, so it may still write here).
+    // Candidate forensic writes and final sealing are validated by the Pages API.
     match /forensics/{uid} {
-      allow create: if isSelf(uid) && !sealed(uid);
-      allow update: if (isSelf(uid) && !sealed(uid)) || isAdmin();
       allow read, delete: if isAdmin();
+      allow create, update: if isAdmin();
     }
 
     // ── Sealed submissions: create-once, immutable, invigilator-readable ─────
     match /submissions/{uid} {
-      allow create: if isSelf(uid)
-        && !sealed(uid)
-        && released()
-        && incoming().uid == uid
-        && incoming().identityKey is string
-        && exists(/databases/$(database)/documents/identities/$(incoming().identityKey))
-        && get(/databases/$(database)/documents/identities/$(incoming().identityKey)).data.uid == request.auth.uid
-        && get(/databases/$(database)/documents/identities/$(incoming().identityKey)).data.state != 'sealed'
-        && get(/databases/$(database)/documents/identities/$(incoming().identityKey)).data.schoolUid == incoming().candidate.schoolUid
-        && get(/databases/$(database)/documents/identities/$(incoming().identityKey)).data.teamId == incoming().candidate.teamId
-        && get(/databases/$(database)/documents/identities/$(incoming().identityKey)).data.name == incoming().candidate.name
-        && incoming().keys().hasAll(['sessionId', 'candidate', 'items', 'checksum', 'salt', 'sealedAt'])
-        && incoming().items is list && incoming().items.size() <= 200
-        && incoming().checksum is string && incoming().checksum.size() == 64;
       allow read, delete: if isAdmin();
-      allow update: if false;
+      allow create, update: if isAdmin();
     }
   }
 }

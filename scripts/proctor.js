@@ -114,6 +114,13 @@ export function releaseMedia() {
   calibrationPoses.length = 0;
 }
 
+export function clearStillData() {
+  if (thumbCanvas) {
+    const context = thumbCanvas.getContext('2d');
+    context && context.clearRect(0, 0, thumbCanvas.width, thumbCanvas.height);
+  }
+}
+
 /* --- 02 · MEDIAPIPE ------------------------------------------------------ */
 export function loadModel() {
   if (landmarker) return Promise.resolve(true);
@@ -288,6 +295,7 @@ export function calibrateNeutralPose() {
 
 /** Captures the reference photo, head pose and ambient noise floor. */
 export function captureBaseline() {
+  if (S.stillsPurged) throw new Error('Reference stills were purged for privacy.');
   const s = cfg().proctoring;
   if (!video || video.readyState < 2) throw new Error('Camera is not streaming yet.');
   const r = sample(performance.now());
@@ -322,7 +330,7 @@ export function startSurveillance() {
 
 /** 160×120 JPEG of the current frame for the forensic record. */
 export function thumbnail() {
-  if (!video || video.readyState < 2) return null;
+  if (S.stillsPurged || !video || video.readyState < 2) return null;
   const c = thumbCanvas.getContext('2d');
   c.drawImage(video, 0, 0, 160, 120);
   return thumbCanvas.toDataURL('image/jpeg', 0.6);
@@ -334,7 +342,7 @@ function flag(type, level, message, data) {
   if (t - (tracker.lastFlag.get(type) || 0) < s.flagCooldownSeconds * 1000) return;
   tracker.lastFlag.set(type, t);
   const entry = recordIncident({ type, level, message, data });
-  if (entry && level >= Level.ADVISORY) attachThumb(entry, thumbnail());
+  if (!S.stillsPurged && entry && level >= Level.ADVISORY) attachThumb(entry, thumbnail());
   if (level === Level.ADVISORY) toast('Proctoring advisory', message, 'warn', 4000);
 }
 

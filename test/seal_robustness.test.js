@@ -9,7 +9,7 @@
  */
 
 import assert from 'node:assert';
-import { fitForensics, prepareOutboxPackage, minimalOutboxPackage } from '../scripts/submission.js';
+import { fitForensics, prepareOutboxPackage, minimalOutboxPackage, readOutbox } from '../scripts/submission.js';
 import { sha256Hex, canonicalJSON } from '../scripts/util.js';
 
 console.log('--- Quizzitch Seal Robustness Unit Tests ---');
@@ -52,7 +52,9 @@ const fullPkg = {
   forensics: {
     sessionId: 'test_sess_001',
     baseline: { photo: 'data:image/jpeg;base64,' + 'Z'.repeat(10000) },
-    thumbs: [{ seq: 1, dataUrl: 'data:image/jpeg;base64,' + 'Z'.repeat(10000) }]
+    thumbs: [{ seq: 1, dataUrl: 'data:image/jpeg;base64,' + 'Z'.repeat(10000) }],
+    leakedCopy: 'data:image/jpeg;base64,' + 'Z'.repeat(10000),
+    ledger: [{ seq: 1, level: 2, type: 'TEST', message: 'Strike', data: { photo: 'data:image/jpeg;base64,' + 'Z'.repeat(10000) } }]
   }
 };
 
@@ -61,7 +63,28 @@ assert.strictEqual(stripped.checksum, fullPkg.checksum);
 assert.deepStrictEqual(stripped.submission, fullPkg.submission);
 assert.strictEqual(stripped.forensics.thumbs.length, 0);
 assert.strictEqual(stripped.forensics.baseline.photo, undefined);
+assert.equal(Object.hasOwn(stripped.forensics, 'leakedCopy'), false);
+assert.equal(Object.hasOwn(stripped.forensics.ledger[0], 'data'), false);
 console.log('   prepareOutboxPackage: Thumbnails and photo stripped cleanly while preserving submission -> PASS');
+
+const localStorageItems = new Map([['qz.outbox.v2', JSON.stringify(fullPkg)]]);
+Object.defineProperty(globalThis, 'localStorage', {
+  configurable: true,
+  value: {
+    getItem: (key) => localStorageItems.get(key) || null,
+    setItem: (key, value) => localStorageItems.set(key, String(value)),
+    removeItem: (key) => localStorageItems.delete(key)
+  }
+});
+const restoredOutbox = readOutbox();
+assert.deepStrictEqual(restoredOutbox.forensics.thumbs, []);
+assert.strictEqual(restoredOutbox.forensics.baseline.photo, undefined);
+assert.doesNotMatch(localStorageItems.get('qz.outbox.v2'), /data:image\/jpeg;base64/);
+console.log('   readOutbox: Legacy local retry copies are scrubbed on load -> PASS');
+localStorageItems.set('qz.outbox.v2', JSON.stringify({ ...fullPkg, submission: { ...fullPkg.submission, forensicCopy: { photo: 'data:image/jpeg;base64,AAAA' } } }));
+assert.equal(readOutbox(), null);
+assert.equal(localStorageItems.has('qz.outbox.v2'), false);
+console.log('   readOutbox: Image-bearing submission extras are discarded -> PASS');
 
 // 3. minimalOutboxPackage: quota fallback
 console.log('3. Testing minimalOutboxPackage fallback...');
@@ -117,6 +140,25 @@ async function testChecksum() {
   console.log('   verifyChecksum: Stored submission document verifies identically -> PASS');
 }
 await testChecksum();
+
+const v3Body = {
+  v: 3,
+  salt: '0123456789abcdef',
+  items: [{ id: 'q1', selected: [1], displayed: ['B'], text: ['Option B'], marked: false }]
+};
+const v3Checksum = await sha256Hex(`${v3Body.salt}|${canonicalJSON(v3Body)}`);
+const serverNormalizedV3 = {
+  ...v3Body,
+  items: [{ ...v3Body.items[0], original: [2] }],
+  checksum: v3Checksum,
+  checksumAlgo: 'SHA-256(salt|canonicalJSON(body))',
+  receivedAt: 1700003601000
+};
+const { checksum: storedV3Checksum, checksumAlgo: storedV3Algo, receivedAt: storedV3At, ...storedV3Body } = serverNormalizedV3;
+storedV3Body.items = storedV3Body.items.map(({ original, ...item }) => item);
+assert.equal(await sha256Hex(`${serverNormalizedV3.salt}|${canonicalJSON(storedV3Body)}`), v3Checksum,
+  'Server-derived original answer indices must not invalidate the client payload checksum');
+console.log('   verifyChecksum: Server-normalized v3 answers preserve the client payload checksum -> PASS');
 
 // 5. Timer expiration & double-seal race simulation
 console.log('5. Testing double-seal race and idempotency...');

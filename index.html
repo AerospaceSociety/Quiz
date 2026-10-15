@@ -68,13 +68,18 @@
         <input id="in-name" name="name" type="text" maxlength="80" required autocapitalize="words" aria-describedby="hint-name">
         <p class="field__hint" id="hint-name">Exactly as on your team's registration roster</p>
       </div>
+      <div class="field">
+        <label for="in-claim-code">Private roster access code</label>
+        <input id="in-claim-code" name="claimCode" type="password" inputmode="text" maxlength="32" minlength="32" required autocomplete="off" spellcheck="false" aria-describedby="hint-claim-code">
+        <p class="field__hint" id="hint-claim-code">32-character code provided by your school. Keep it private.</p>
+      </div>
 
       <div class="field field--consent">
         <label class="check check--consent">
           <input type="checkbox" id="in-consent" name="consent" required>
           <span class="check__text">
             <b>[DRAFT — For School &amp; Parent/Guardian Review under DPDP Act 2023]</b>
-            I (and my parent/guardian, if candidate is a minor) consent to on-device camera proctoring during CelesteCon 2026. Video is processed locally in the browser; there is no continuous video recording or audio monitoring. Only the reference photo and incident review stills are transmitted with the submission, and all forensic stills are permanently deleted within 30 days of event conclusion.
+            I (and my parent/guardian, if candidate is a minor) consent to on-device camera proctoring during CelesteCon 2026. Video is processed locally in the browser; there is no continuous video recording or audio monitoring. A reference photo and limited incident stills may be transmitted for review. Organisers must purge stored stills within 30 days after the event; connected pages clear app-held stills on purge, but offline copies, screenshots, and downloads cannot be recalled.
           </span>
         </label>
       </div>

@@ -84,6 +84,30 @@ export function buildPaper(bank, seedKey, division) {
   return S.paper;
 }
 
+export function installPaper(paper) {
+  if (!Array.isArray(paper) || !paper.length || paper.length > 200) throw new Error('The server returned an invalid paper.');
+  const ids = new Set();
+  for (let index = 0; index < paper.length; index++) {
+    const question = paper[index];
+    if (!question || typeof question.id !== 'string' || ids.has(question.id) || question.n !== index + 1
+      || !Array.isArray(question.options) || question.options.length < 2
+      || (question.order != null && (!Array.isArray(question.order) || question.order.length !== question.options.length
+        || new Set(question.order).size !== question.options.length
+        || question.order.some((optionIndex) => !Number.isSafeInteger(optionIndex) || optionIndex < 0 || optionIndex >= question.options.length)))) {
+      throw new Error('The server returned an invalid paper.');
+    }
+    ids.add(question.id);
+  }
+  S.paper = deepFreeze(paper.map((question) => ({
+    ...question,
+    options: question.options.slice(),
+    ...(Array.isArray(question.order) ? { order: question.order.slice() } : {})
+  })));
+  S.answers = S.paper.map(() => ({ sel: [], marked: false, visits: 0, timeMs: 0 }));
+  S.idx = 0;
+  return S.paper;
+}
+
 /** Re-applies a crash-recovery snapshot onto a freshly rebuilt paper. */
 export function restoreAnswers(saved, idx) {
   if (!Array.isArray(saved) || saved.length !== S.paper.length) return false;
@@ -132,7 +156,7 @@ function changed(kind) {
     type: kind,
     level: Level.INFO,
     message: `Q${q.n} ${kind === 'MARK' ? (a.marked ? 'marked for review' : 'review mark removed') : `response → ${a.sel.map((i) => String.fromCharCode(65 + i)).join(',') || 'cleared'}`}`,
-    data: { q: q.n, id: q.id, sel: a.sel.map((i) => q.order[i]), marked: a.marked }
+    data: { q: q.n, id: q.id, sel: a.sel.slice(), marked: a.marked }
   });
   bus.emit(EV.ANSWERS, S.idx);
   persist();
@@ -189,7 +213,7 @@ export function moduleProgress() {
   }).filter((p) => p.total > 0);
 }
 
-/** Response ledger in submission form: both displayed letters and original option indices. */
+/** Response ledger in submission form: displayed choices only. */
 export function responseItems() {
   return S.paper.map((q, i) => {
     const a = S.answers[i];
@@ -199,7 +223,7 @@ export function responseItems() {
       catId: q.catId,
       scheme: q.scheme,
       displayed: a.sel.map((x) => String.fromCharCode(65 + x)),
-      original: a.sel.map((x) => q.order[x]),
+      selected: a.sel.slice(),
       text: a.sel.map((x) => q.options[x]),
       marked: a.marked,
       visits: a.visits,

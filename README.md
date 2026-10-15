@@ -2,9 +2,8 @@
 
 **AEROSS · The Aerospace Society · Delhi Public School, R.K. Puram**
 
-Proctored preliminary screening for **In-Pursuit Of Dispute** (IPD, 3-member teams, pooled scores
-seed the top 16) and **AEROSS Theatre** (THT). Static front end + Firebase (Firestore + Auth) +
-optional Jotform mirror. No build step, no framework, no server of our own.
+Preliminary screening for **In-Pursuit Of Dispute** (IPD) and **AEROSS Theatre** (THT). Static
+front end, Firebase Auth/Firestore, Cloudflare Pages Functions, and an optional Jotform mirror.
 
 | Page | Who | What |
 |---|---|---|
@@ -23,12 +22,15 @@ index.html ─ scripts/app.js ─────────── stage machine (1
                ├─ proctor.js             camera, MediaPipe Face Landmarker @ ~2.5 FPS, pose, freeze
                ├─ sandbox.js             key lockdown, fullscreen grace, focus/visibility, DevTools tripwire
                │    └─ tripwire.worker.js  `debugger` timing probe, off the main thread
-               ├─ timer.js               server-offset handshake, monotonic countdown, anomaly detection
-               ├─ submission.js          heartbeat, live events, SHA-256 package, Firebase batch, Jotform, print
-               └─ firebase.js            the only module that talks to Firestore/Auth (shared with admin)
+               ├─ timer.js               Cloudflare server-time handshake, monotonic countdown
+               ├─ submission.js          heartbeat, live events, package checksum, API seal, Jotform, print
+               └─ firebase.js            Firebase Auth/Firestore reads and admin operations
+functions/api/candidate.js               authenticated roster claim, telemetry, validated submission seal
+functions/api/submit.js                  Firestore-verified Jotform mirror
+functions/api/retention.js                authenticated still purge job
 admin.html ─ scripts/admin.js ─ firebase.js + util.js
 styles/styles.css (theme, workspace, palette, print receipt) · styles/admin.css (command center)
-config/settings.json (all tunables) · config/questions.json (bank source — seed it, don't deploy it)
+config/settings.json (public tunables) · config/questions.json (private bank source — seed it, never serve it)
 firestore.rules · _headers (Cloudflare/Netlify) · vercel.json (Vercel)
 ```
 
@@ -37,16 +39,21 @@ firestore.rules · _headers (Cloudflare/Netlify) · vercel.json (Vercel)
 | Collection | Written by | Read by | Purpose |
 |---|---|---|---|
 | `exam_control/status` | admin | everyone signed in | `waiting` / `active` / `ended`, server `startedAt`, `durationSeconds`, `extensionSeconds` |
-| `quizzitch_questions/{id}` | admin | candidates **only while `active`** | question bank (no answers) |
+| `quizzitch_questions/{id}` | admin | admin / Pages Function | candidates receive only their server-generated paper after release |
 | `answer_key/current` | admin | admin | `{ "Q101": [0], … }` zero-based original option indices |
-| `registrations/{schoolUid}` | admin | candidate (single `get`) | optional roster check |
-| `identities/{key}` | candidate (own) | candidate `get` / admin | one live device per candidate; no second sitting |
-| `sessions/{uid}` | candidate (own) | admin | heartbeat: stage, status, strikes, answered, current Q, fullscreen |
-| `events/{auto}` | candidate (own uid) | admin | live feed: strikes (with 160×120 still), rate-limited advisories, milestones |
-| `forensics/{uid}` | candidate until sealed | admin | baseline photo, incident stills, full ledger, device info |
-| `submissions/{uid}` | candidate, **create once** | admin | sealed responses + salted SHA-256 checksum |
-| `time_sync/{uid}` | candidate (own) | candidate | server-timestamp handshake scratch doc |
+| `roster/{key}` | admin | admin / Pages Function | candidate profile keyed by a one-time random access-code hash |
+| `candidate_claims/{uid}` | Pages Function | admin | binds one Firebase account to one candidate identity |
+| `candidate_papers/{uid}` | Pages Function | admin | server-assigned question snapshot, deleted atomically at seal or after retention |
+| `identities/{key}` | Pages Function | admin / identity owner | one live device per candidate; sealed candidates cannot re-sit |
+| `sessions/{uid}` | Pages Function | candidate (own) / admin | validated session shape and monotonic client-reported counters |
+| `events/{id}` | Pages Function | admin | immutable live events, capped at 80 per session |
+| `forensics/{uid}` | Pages Function | admin | baseline photo, incident stills, full ledger, device info |
+| `submissions/{uid}` | Pages Function, **create once** | admin | assigned-paper-validated answers, server answer counts, client-reported proctor flags, and checksum |
 | `admins/{uid}` | **console only** | self | invigilator allowlist |
+
+Candidate data writes are denied by Firestore rules and pass through authenticated Pages Functions.
+The Functions use the server-only `FIREBASE_SERVICE_ACCOUNT` secret. Never put that key in browser
+assets, settings, source control, or `.dev.vars` committed to Git.
 
 ---
 
@@ -69,35 +76,34 @@ firestore.rules · _headers (Cloudflare/Netlify) · vercel.json (Vercel)
 7. **Upload the answer key** (same tab): `{ "Q101": [0], "Q104": [0, 1] }` — indices into the
    **original** option order as written in the bank, zero-based. Or upload a bank file that has
    `correct` arrays and accept the prompt.
-8. *(Optional)* **Rosters** — `registrations/CLT-2026-SCH-00042`:
-   ```json
-   { "schoolName": "Delhi Public School, R.K. Puram",
-     "teams": { "IPD-T1-041": { "members": ["Aarav Mehta", "Ishita Rao", "Kabir Sethi"] },
-                "THT-T2-007": { "members": ["Meera Iyer"] } } }
-   ```
-   `settings.registry.rosterCheck`: `off` · `advisory` (default — unverified sign-ins are allowed and
-   labelled) · `strict` (name must be on the roster).
+8. **Upload the authoritative roster** from Admin → *Question Bank & Tools*. The portal generates a
+   random 128-bit access code for each candidate and downloads a CSV containing those private codes.
+   Distribute each code securely, retain a protected backup, and include the `claimCode` column when
+  re-uploading a roster so codes remain stable. Each upload replaces the roster and revokes omitted
+  access codes. Candidate writes never read the roster directly.
 
 ---
 
 ## 3 · Running a paper
 
-1. Candidates open the site, sign in (School UID, Team ID, full name), calibrate, read the protocol.
+1. Candidates sign in with School UID, Team ID, registered name, and their private roster access code.
+   They calibrate and read the protocol.
    They wait on Stage 3 with “Awaiting invigilator release”.
 2. Invigilator presses **Release paper**. The server stamps `startedAt`; every candidate's
    **Enter Examination Workspace** unlocks (a click is required — browsers only allow fullscreen from a gesture).
 3. Everyone shares one server-authoritative end time: `startedAt + duration + extensions`. Late joiners
    get the remaining time, not a fresh 45 minutes. **+5 min** extends everyone.
-4. **End & force submit** seals every open paper immediately.
+4. **End & force submit** permits a short, two-minute delivery window for final seals.
 5. Results tab: scores, module breakdown, checksum verification, IPD pooled standings, exports
    (candidates CSV, standings CSV, integrity-log CSV, full JSON).
-6. Between rounds: delete `sessions`, `events`, `identities` (and archive `submissions`, `forensics`)
-   in the console, then **Reset to waiting**.
+6. Between rounds: export required records, then remove `sessions`, `events`, `identities`,
+   `candidate_claims`, `candidate_papers`, `submissions`, and `forensics` in the console before replacing
+   the question bank or answer key. Then **Reset to waiting**.
 
-**Recovery** — a reload or browser crash resumes the same paper (same seeded question/option order,
-answers and strikes restored; logged as an advisory). A dead laptop: open the candidate's forensic
-record → **Release identity lock**, and they sign in on another machine (their answers stay with the
-old device; strikes carry over via the server session). A sealed submission can never be re-sat.
+**Recovery** — a reload or browser crash resumes the same server-assigned paper (same question/option order,
+answers restored; server-held strikes carry over). A dead laptop: open the candidate's forensic
+record → **Release identity lock**, then sign in on another machine. Answers held only on the old
+device cannot be recovered. A sealed submission cannot be re-sat.
 Shared lab machines are supported: after a recorded submission the terminal signs out, so the next
 candidate gets a fresh identity.
 
@@ -120,8 +126,8 @@ candidate gets a fresh identity.
 
 *(Microphone audio is NOT accessed, recorded or monitored — proctoring is vision-only.)*
 
-Every 3 advisories of one kind become a strike; **3 strikes seal the paper** (verdict `DISQUALIFIED`).
-Verdicts: `CLEAN` · `REVIEW` (advisories only) · `FLAGGED` (strikes) · `DISQUALIFIED`.
+In the unmodified client, every 3 advisories of one kind become a strike; **3 strikes seal the paper**.
+Stored verdicts and strike totals are explicitly client-reported, not server-attested.
 
 ### What this can and cannot do — read before relying on it
 
@@ -130,14 +136,19 @@ Verdicts: `CLEAN` · `REVIEW` (advisories only) · `FLAGGED` (strikes) · `DISQU
   elsewhere those keys still work — but each use fires blur/visibility/fullscreen events, which are strikes.
 - **Anything in the page can be inspected by a determined user.** State lives in ES-module scope
   (nothing on `window`), config and the paper are deep-frozen, the state tree is frozen at seal — this
-  stops console tampering, not a patched browser. The defences that actually hold are server-side:
-  **the answer key never reaches candidates**, questions are unreadable until release, submissions are
-  create-once, strikes can only go up, and invigilators re-verify every checksum.
+  stops casual console tampering, not a patched browser. Server-side controls protect roster claims,
+  keep the answer key private, randomly assign and persist a distinct paper, validate answer shape/order, and make
+  submissions create-once. Client-side proctoring reports can be omitted or forged by a modified client.
 - **The checksum proves the record wasn't altered *after* sealing** (salt + canonical JSON, recomputed
   in the admin deck). It cannot prove the client was honest *before* sealing.
-- **Question bank exposure & residual risk:** Questions in `quizzitch_questions` are completely locked before release and require an active rostered candidate identity to read once released. The answer key is stored in `/answer_key` and is NEVER accessible to candidates under any circumstance. However, once the paper is released to an active candidate, question stems and options are delivered to the browser. A rogue candidate using a patched browser or memory inspector could dump question stems. Mitigation: The answer key never touches candidate devices, question orders are seeded/shuffled per candidate, and a stretch Cloudflare Worker endpoint (`/api/paper`) can serve items on-demand if per-item delivery is desired in future rounds.
+- **Question bank exposure & residual risk:** Candidate Firestore reads are denied. The Pages API assigns a paper only after release; its questions and options must then reach the browser and can be copied by a patched client or external camera. The answer key stays admin-only. Per-candidate shuffle reduces answer sharing but cannot stop it.
+- The source question bank is excluded from uploaded static assets, and `/config/questions.json` returns `404` in Pages previews and deployments. Candidate papers omit the server-held option permutation; the API converts displayed selections to original answer-key indices only when sealing.
 - **Vision flags are evidence for a human reviewer**, not automated verdicts. Lighting, glasses and
   webcam position move the numbers; tune thresholds in `settings.proctoring` after a rehearsal.
+- Candidate and Jotform relay routes apply per-account and Cloudflare client-IP request caps. These
+  are isolate-local best-effort throttles, not a global quota firewall; distributed traffic or isolate
+  restarts can bypass them. A zero-budget browser deployment cannot promise immunity from denial of
+  service or guarantee a cheat-proof sitting.
 
 ### Deliberate departures from the brief
 
@@ -151,22 +162,27 @@ Verdicts: `CLEAN` · `REVIEW` (advisories only) · `FLAGGED` (strikes) · `DISQU
 
 ---
 
-## 5 · Free-tier budget (Firestore Spark: 20 000 writes, 50 000 reads per day)
+## 5 · Free-tier budget
 
-Per candidate per 45-minute paper, at the default 30 s heartbeat: ≈ 90 heartbeats + ≈ 25 other writes
-(sign-in, identity, clock handshakes, events, sealing batch) ≈ **115 writes**. Each of those writes is
-also **one read per open admin tab**.
+`npm run test:simulation` estimates Firestore reads and writes across the authenticated API paths,
+including the extra validation reads per heartbeat/event, assigned-paper reads, admin listeners, and
+both purge paths. It models 30 candidates, a 60-minute run, and three admin reloads; it is not a billing
+guarantee or an emulator test. Real free-tier quotas and Jotform submission limits must be checked for
+the actual accounts/event date. If the estimate exceeds the available quota, do not run a live paper.
 
-| Candidates | Writes | Reads (1 admin tab) | Fits Spark? |
-|---|---|---|---|
-| 100 | ~11.5 k | ~12 k | Yes |
-| 170 | ~19.5 k | ~20 k | Just |
-| 300 | ~34.5 k | ~35 k | **No** — writes exceed 20 k |
+The simulation is a stress estimate, not a promise of zero cost. Firebase, Cloudflare, and Jotform
+quotas are separate, and exceeding any provider's free allowance can disable the live quiz or require
+payment. Keep the roster, question bank, telemetry, and image retention small; test with the expected
+candidate count in a separate project first.
 
-To stay on the free tier for larger rounds, raise `telemetry.heartbeatSeconds` to 60–90 (≈ 60–70
-writes per candidate → ~300 candidates), keep admin tabs to one or two, or split the cohort across
-sessions/days. Beyond that, the Blaze plan costs cents per round (≈ $0.18 per 100 k writes) — add a
-budget alert if you choose it.
+Current provider limits checked 2026-10-15: Firestore's free database includes 50,000 reads and
+20,000 writes per day; Cloudflare Workers Free includes 100,000 requests per day shared with Pages
+Functions; Jotform Starter includes 100 submissions per month and 1,000 API calls per day. Quotas can
+change, and other account usage consumes the same allowance. Jotform is only a mirror: its quota failure
+does not roll back a sealed Firestore result. See the [Firestore pricing](https://firebase.google.com/docs/firestore/pricing),
+[Cloudflare Pages Functions pricing](https://developers.cloudflare.com/pages/functions/pricing/),
+[Jotform usage limits](https://www.jotform.com/help/408-Understanding-Your-Account-Usage-and-Limits/),
+and [Jotform API limits](https://www.jotform.com/help/406-daily-api-call-limits/).
 
 ---
 
@@ -174,12 +190,12 @@ budget alert if you choose it.
 
 | Block | Key settings |
 |---|---|
-| `meta` | `paperId` (also seeds the per-candidate shuffle), `round`, `build` |
+| `meta` | `paperId` (exam identifier), `round`, `build` |
 | `exam` | `durationSeconds` 2700, `itemsPerModule` 5, shuffles, `questionSource` `firestore`/`local`, `requireRelease` |
 | `timer` | `syncSamples` 3, `resyncSeconds` 300, `anomalyThresholdMs` 5000, `anomalyAction` `submit`/`strike` |
 | `security` | `maxStrikes` 3, `advisoriesPerStrike` 3, `fullscreenGraceSeconds` 10, `devtoolsTripwire`, `requireFullscreen` |
 | `proctoring` | `inferenceIntervalMs` 400 (2.5 FPS), `frameWidth/Height` 320×240, `delegate` `CPU`, all thresholds, CDN URLs, `allowDegradedMode` |
-| `telemetry` | `heartbeatSeconds` 30, `advisoryRateLimitSeconds` 60 |
+| `telemetry` | `heartbeatSeconds` 60, `advisoryRateLimitSeconds` 60 |
 | `schemes` | `standard` / `highstakes` (shown as *Reasoning*): +5 / −1 · `multi`: +5 / 0, exact match only · blank: 0 |
 | `modules`, `divisions`, `registry` | module letters/names; IPD/THT with team size & seeds; ID regexes |
 | `jotform` | see §7 |
@@ -189,7 +205,7 @@ optional `"divisions": ["IPD"]`. Inline maths: `$\Delta v = \sqrt{\mu/r}$` (KaTe
 
 ---
 
-## 7 · Jotform mirror (disabled by default)
+## 7 · Jotform mirror
 
 Firebase is the system of record. To also mirror each submission into Jotform:
 
@@ -197,66 +213,72 @@ Firebase is the system of record. To also mirror each submission into Jotform:
    ```bash
    export JOTFORM_API_KEY="your-api-key"
    npm run provision:jotform
-   # or: python scripts/provision_jotform.py --api-key="your-api-key"
    ```
-   This calls `https://api.jotform.com`, creates all 10 required fields on form `262450769915063`, and updates `config/settings.json` automatically with `fieldMap` and `enabled: true`.
+   This calls `https://api.jotform.com`, creates all 10 required fields, and enables the mirror in `config/settings.json`. Set the server-side `JOTFORM_FORM_ID` to the provisioned form ID.
 
 2. Or build the form manually: short-text fields for School UID, Team ID, Candidate Name, Division, Session ID,
-   Answered, Verdict, Checksum, and long-text fields for Responses JSON and Summary Text. In the form's source,
-   copy each field's `name` (e.g. `q3_schoolUid`) into `jotform.fieldMap`, and set `jotform.enabled: true`.
+   Answered, Verdict, Checksum, and long-text fields for Responses JSON and Summary Text. Their internal field names must match the provisioner names exactly; the relay refuses missing fields.
 
-Jotform sends no CORS headers, so the direct browser submission shows “Dispatched” with an opaque response.
+Jotform's API is called by the server relay, not directly by candidate browsers.
 
-### Secure Webhook Relay (Cloudflare Pages Function)
-For high-integrity screening, set `jotform.webhookUrl` to your relay endpoint. The client attaches:
-- `Authorization: Bearer <Firebase_ID_Token>` (cryptographically verified session JWT)
-- Full sealed package including strikes, forensics metadata, and the salted SHA-256 checksum
+### Authoritative Submission and Jotform Relay (Cloudflare Pages Functions)
+The browser sends only the sealed submission and Firebase ID token to the fixed same-origin `/api/submit` relay. Still images are not sent to Jotform.
 
-An indigenous zero-cost relay is built right into Quizzitch with zero external dependencies:
-- **Cloudflare Pages**: `functions/api/submit.js` deploys automatically as a serverless Pages Function at `/api/submit`. Simply set `"webhookUrl": "/api/submit"` in `config/settings.json`. Set `JOTFORM_API_KEY` and `FIREBASE_PROJECT_ID` as Cloudflare Pages environment variables.
+The relay removes the browser-to-Jotform CORS dependency; it does not remove provider quotas or guarantee zero cost:
+- **Cloudflare Pages**: `functions/api/submit.js` deploys automatically at `/api/submit`. Configure server-side `JOTFORM_API_KEY`, `JOTFORM_FORM_ID`, and `FIREBASE_PROJECT_ID`; never place the Jotform API key in client config.
 
-It gates every submission through:
-1. **Firebase JWT Verification**: Confirms identity and valid anonymous auth session via Google tokeninfo.
-2. **Identity Matching**: Confirms the caller UID matches `identityKey`.
-3. **Single-Submission Lock**: Prevents duplicate submissions and replay attacks.
-4. **Cryptographic Checksum Verification**: Recomputes `SHA-256(salt + "|" + canonicalJSON(body))` to ensure zero tampering in transit.
-5. **Private Jotform API Dispatch**: Forwards to `https://api.jotform.com/form/{formID}/submissions` using `JOTFORM_API_KEY`.
+The Pages API validates Firebase ID tokens, access-code claims, session ownership, released paper
+question order/options, package checksums, and create-once seals. Jotform accepts only the matching
+Firestore submission; form IDs and submitted fields are selected server-side. A SHA-256 checksum
+detects changes after package creation but is **not** an HMAC/signature and does not prove that
+client-side proctoring ran honestly.
 
 ---
 
 ## 8 · DPDP Act 2023 & Minor Consent Compliance
 
-In compliance with India's Digital Personal Data Protection (DPDP) Act 2023:
-1. **Candidate & Guardian Consent**: Mandatory checkbox on Stage 1 sign-in with explicit draft disclosures (on-device ML processing only, no continuous video recording, no microphone/audio monitoring, incident review stills only). `consentVersion` (`2026.1-DPDP-DRAFT`) and timestamp `consentAt` are bound to candidate identities, session patches, and sealed submission documents.
-2. **Forensic Stills Retention Cap**: Forensic documents are strictly capped at $\le$ 500KB and a maximum of 8 thumbnails.
-3. **Admin Stills Purge Tool**: Invigilators can invoke **Purge forensic stills** from the admin deck (*Question Bank & Tools* tab). This permanently deletes `baseline.photo` and clears `thumbs: []` across all candidate forensic records while preserving answers, scores, timestamps, violation event ledger, and cryptographic checksums for 30-day compliance.
+The consent text remains a draft and this software does not certify legal compliance. The API now requires
+the configured consent version and an affirmative client flag, and records server receipt time; a modified
+client can still lie about whether a person actually saw or accepted the text. Obtain appropriate
+school/guardian review before collecting images.
+
+The Admin **Purge forensic stills** action removes forensic thumbnails/baselines and incident-feed copies,
+clears stills held by connected candidate and admin pages, and omits images from JSON exports and local retry
+packages. The API refuses to store new stills for that event after the marker is set. A separate daily
+Cloudflare Worker purges stale stills 30 days after the event ends (or by record age if no end timestamp
+exists). Offline pages and copies outside the site (screenshots, downloads, exports, or OS backups) cannot
+be remotely recalled.
 
 ---
 
 ## 9 · Automated Test Suites
 
-Run all verification test suites locally without external dependencies:
+Run local quota, seal-shape, API rate-limit, and static trust-boundary checks:
 ```bash
-npm test                # Runs quota simulation, seal robustness, and security rules
+npm test                # Runs quota simulation, seal robustness, API limits, and security rules
 npm run test:simulation # Validates Firestore Spark quota budget (30 candidates x 60 min <= 6,000 writes, <= 15,000 reads)
 npm run test:seal       # Validates fitForensics 500KB/8-thumb cap, fallback payloads, and double-seal idempotency
-npm run test:rules      # Validates 10 critical security rules scenarios against firestore.rules
+npm run test:rules      # Static checks only; not a Firestore Emulator test
 ```
 
 ## 10 · Local development & deployment
 
 ```bash
 npm install
-npm run dev          # http://localhost:8000  (camera needs localhost or HTTPS)
+npm run dev          # public-only staging at http://127.0.0.1:8000
+npm run preview      # Pages Functions preview from the same safe staging build
 ```
 
-Rehearse without Firebase: set `firebase.enabled: false`, `exam.questionSource: "local"` — the portal runs
-fully offline and the receipt says “Rehearsal mode — not transmitted”.
+These commands build an allowlisted `dist/` and never serve the repository root; the question bank is not
+copied. Rehearse the live flow in a separate Firebase project. Do not use `wrangler pages dev .` or a
+generic static server on the repository root, and do not deploy this site to GitHub Pages: neither path
+provides the required Pages Functions security boundary.
 
-- **Cloudflare Pages**: `npm run deploy`. `_headers` applies the security headers; `.assetsignore` keeps
-  `config/questions.json`, rules and tooling off the CDN.
-- **GitHub Pages**: works (the `<meta>` CSP applies), but it can't set `frame-ancestors`/HSTS headers and
-  will publish `config/questions.json` unless you delete it from the published branch.
+- **Cloudflare Pages**: `npm run deploy` rebuilds and deploys only the allowlisted `dist/` assets; Pages
+  Functions remain sourced from `functions/`. `_headers` applies security headers, and a Pages Function
+  also blocks direct question-bank requests. `.assetsignore` provides a secondary upload safeguard.
+- `questionSource: "local"` is not included in the safe staging build; use the Firestore paper API for
+  rehearsals rather than publishing the bank to a browser.
 
 Browser support: current Chrome / Edge (recommended — Keyboard Lock, best MediaPipe performance),
 Firefox. Safari desktop works with reduced shortcut capture. Phones and tablets are not supported.

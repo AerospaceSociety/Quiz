@@ -1,0 +1,9 @@
+name = "quizzitch-retention-purge"
+main = "workers/retention.js"
+compatibility_date = "2026-10-14"
+
+[triggers]
+crons = ["0 10 * * *"]
+
+[vars]
+RETENTION_ENDPOINT = "https://quiz.pages.dev/api/retention"

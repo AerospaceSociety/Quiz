@@ -12,9 +12,13 @@
 import { S, cfg, bus, EV, Stage, Level, now, answeredCount, markedCount, unansweredCount, persist } from './session.js';
 import { responseItems, moduleProgress } from './engine.js';
 import * as fb from './firebase.js';
-import { sha256Hex, canonicalJSON, istStamp } from './util.js';
+import { sha256Hex, canonicalJSON, randomHex } from './util.js';
 
 const OUTBOX = 'qz.outbox.v2';
+const OUTBOX_SUBMISSION_KEYS = new Set(['v', 'uid', 'sessionId', 'paperId', 'candidate', 'identityKey', 'reason', 'verdict', 'strikes', 'advisories', 'startedAt', 'sealedAt', 'elapsedSec', 'clockSource', 'resumes', 'total', 'answered', 'unanswered', 'marked', 'modules', 'items', 'salt', 'checksum', 'checksumAlgo']);
+const OUTBOX_CANDIDATE_KEYS = new Set(['schoolUid', 'teamId', 'memberId', 'name', 'division', 'schoolName', 'rosterVerified', 'isIndividual', 'consentVersion', 'consentAt']);
+const OUTBOX_ITEM_KEYS = new Set(['n', 'id', 'catId', 'scheme', 'displayed', 'selected', 'original', 'text', 'marked', 'visits', 'seconds']);
+const OUTBOX_MODULE_KEYS = new Set(['id', 'code', 'answered', 'total']);
 const LIVE_EVENTS = new Set(['SIGNED_IN', 'EXAM_STARTED', 'SESSION_RESUMED', 'SUBMITTED', 'CLOCK_ANOMALY']);
 
 let heartbeat = null;
@@ -33,7 +37,8 @@ async function sendEvent(doc) {
   if (eventSeq >= 80) return;
   const uid = S.uid || (fb.currentUser() && fb.currentUser().uid);
   if (!uid) return;
-  const id = `${uid}_${eventSeq++}`;
+  const id = randomHex(16);
+  eventSeq++;
   await fb.writeEvent(id, doc);
 }
 
@@ -85,11 +90,15 @@ export function pushSoon(delay = 2000) {
   }, delay);
 }
 
-export function startTelemetry() {
-  if (heartbeat || closed) return;
+export async function startTelemetry() {
+  if (heartbeat || closed) return true;
   const initial = sessionPatch();
   lastWrittenSessionDigest = sessionDigest(initial);
-  fb.writeSession(initial);
+  const initialSaved = await fb.writeSession(initial);
+  if (fb.isReady() && !initialSaved) {
+    closed = false;
+    return false;
+  }
 
   heartbeat = setInterval(() => {
     if (closed) return;
@@ -101,6 +110,7 @@ export function startTelemetry() {
 
   bus.on(EV.STATUS, () => pushSoon(500));
   bus.on(EV.STAGE, () => pushSoon(0));
+  return true;
 }
 
 /** Must run before the stage flips to SEALED, so no heartbeat can race the sealing batch. */
@@ -113,6 +123,7 @@ export function stopTelemetry() {
 
 function eventDoc(entry, thumb) {
   return {
+    identityKey: S.identityKey,
     sessionId: S.sessionId,
     schoolUid: S.candidate.schoolUid,
     teamId: S.candidate.teamId,
@@ -165,10 +176,6 @@ export function wireEventStream(getThumb) {
 }
 
 /* --- 02 · SEALED PACKAGE -------------------------------------------------- */
-export function identityKeyFor(schoolUid, teamId, name) {
-  return sha256Hex(`${schoolUid}|${teamId}|${name}`).then((h) => h.slice(0, 40));
-}
-
 function deviceInfo() {
   return {
     ua: navigator.userAgent.slice(0, 200),
@@ -212,7 +219,8 @@ export async function buildPackage(reason) {
   const s = cfg();
   const items = responseItems();
   const body = {
-    v: 2,
+    v: 3,
+    uid: S.uid || fb.currentUid(),
     sessionId: S.sessionId,
     paperId: s.meta.paperId,
     candidate: { ...S.candidate },
@@ -238,8 +246,8 @@ export async function buildPackage(reason) {
 
   const forensics = fitForensics({
     sessionId: S.sessionId,
-    baseline: S.baseline ? { photo: S.baseline.photo, pose: S.baseline.pose, noise: S.baseline.noise, light: S.baseline.light, camera: S.baseline.camera, capturedAt: S.baseline.capturedAt } : null,
-    thumbs: S.thumbs.slice(),
+    baseline: !S.stillsPurged && S.baseline ? { photo: S.baseline.photo, pose: S.baseline.pose, noise: S.baseline.noise, light: S.baseline.light, camera: S.baseline.camera, capturedAt: S.baseline.capturedAt } : null,
+    thumbs: S.stillsPurged ? [] : S.thumbs.slice(),
     ledger: S.ledger.map((e) => ({ ...e })),
     ledgerTruncated: false,
     device: deviceInfo(),
@@ -250,24 +258,104 @@ export async function buildPackage(reason) {
 }
 
 /* --- 03 · DISPATCH -------------------------------------------------------- */
-function readOutbox() {
-  try { return JSON.parse(localStorage.getItem(OUTBOX) || 'null'); } catch (_) { return null; }
+export function readOutbox() {
+  let stored;
+  try {
+    const raw = localStorage.getItem(OUTBOX) || 'null';
+    if (raw.length > 700 * 1024) throw new Error('Stored retry package is oversized');
+    stored = JSON.parse(raw);
+  }
+  catch (_) {
+    try { localStorage.removeItem(OUTBOX); } catch (_) {}
+    return null;
+  }
+  if (!stored || typeof stored !== 'object' || Array.isArray(stored) || !stored.submission || typeof stored.submission !== 'object') {
+    try { localStorage.removeItem(OUTBOX); } catch (_) {}
+    return null;
+  }
+  if (!safeOutboxSubmission(stored.submission)) {
+    try { localStorage.removeItem(OUTBOX); } catch (_) {}
+    return null;
+  }
+  const sanitized = prepareOutboxPackage(stored);
+  try { localStorage.setItem(OUTBOX, JSON.stringify(sanitized)); }
+  catch (_) {
+    try { localStorage.setItem(OUTBOX, JSON.stringify(minimalOutboxPackage(sanitized))); }
+    catch (_) { try { localStorage.removeItem(OUTBOX); } catch (_) {} }
+  }
+  return sanitized;
+}
+
+function safeOutboxSubmission(submission) {
+  if (!submission || typeof submission !== 'object' || Array.isArray(submission)
+    || Object.keys(submission).some((key) => !OUTBOX_SUBMISSION_KEYS.has(key))) return false;
+  const candidate = submission.candidate;
+  if (candidate && (typeof candidate !== 'object' || Array.isArray(candidate)
+    || Object.keys(candidate).some((key) => !OUTBOX_CANDIDATE_KEYS.has(key)))) return false;
+  if (submission.items != null && (!Array.isArray(submission.items) || submission.items.some((item) => !item
+    || typeof item !== 'object' || Array.isArray(item)
+    || Object.keys(item).some((key) => !OUTBOX_ITEM_KEYS.has(key))))) return false;
+  if (submission.modules != null && (!Array.isArray(submission.modules) || submission.modules.some((module) => !module
+    || typeof module !== 'object' || Array.isArray(module)
+    || Object.keys(module).some((key) => !OUTBOX_MODULE_KEYS.has(key))))) return false;
+  if (submission.advisories != null && (!submission.advisories || typeof submission.advisories !== 'object' || Array.isArray(submission.advisories)
+    || Object.values(submission.advisories).some((count) => !Number.isSafeInteger(count) || count < 0))) return false;
+  const pending = [submission];
+  while (pending.length) {
+    const value = pending.pop();
+    if (typeof value === 'string' && /data:image\//i.test(value)) return false;
+    if (Array.isArray(value)) value.forEach((item) => pending.push(item));
+    else if (value && typeof value === 'object') Object.values(value).forEach((item) => pending.push(item));
+  }
+  return true;
 }
 
 export function prepareOutboxPackage(pkg) {
   if (!pkg) return null;
+  const forensic = pkg.forensics;
+  const text = (value, max) => typeof value === 'string' && !/data:image\//i.test(value) ? value.slice(0, max) : '';
+  const number = (value, min, max) => Number.isFinite(Number(value)) ? Math.max(min, Math.min(max, Number(value))) : 0;
   return {
-    checksum: pkg.checksum,
+    checksum: typeof pkg.checksum === 'string' && /^[a-f0-9]{64}$/i.test(pkg.checksum) ? pkg.checksum : '',
     submission: pkg.submission,
-    forensics: pkg.forensics ? {
-      ...pkg.forensics,
+    forensics: forensic ? {
+      sessionId: text(forensic.sessionId, 80),
+      checksum: typeof forensic.checksum === 'string' && /^[a-f0-9]{64}$/i.test(forensic.checksum) ? forensic.checksum : '',
+      baseline: forensic.baseline ? {
+        pose: forensic.baseline.pose && typeof forensic.baseline.pose === 'object' ? {
+          yaw: number(forensic.baseline.pose.yaw, -180, 180),
+          pitch: number(forensic.baseline.pose.pitch, -180, 180)
+        } : null,
+        noise: number(forensic.baseline.noise, 0, 1000),
+        capturedAt: number(forensic.baseline.capturedAt, 0, Date.now())
+      } : null,
       thumbs: [],
-      baseline: pkg.forensics.baseline ? {
-        ...pkg.forensics.baseline,
-        photo: undefined
-      } : null
+      ledger: safeOutboxLedger(forensic.ledger),
+      ledgerTruncated: forensic.ledgerTruncated === true,
+      device: forensic.device ? {
+        ua: text(forensic.device.ua, 200),
+        cores: number(forensic.device.cores, 0, 128),
+        memoryGb: number(forensic.device.memoryGb, 0, 1024),
+        screen: text(forensic.device.screen, 40),
+        extendedDisplay: forensic.device.extendedDisplay === true
+      } : {},
+      updatedAt: number(forensic.updatedAt, 0, Date.now())
     } : null
   };
+}
+
+function safeOutboxLedger(entries, strikesOnly = false) {
+  if (!Array.isArray(entries)) return [];
+  return entries.filter((entry) => entry && typeof entry === 'object' && (!strikesOnly || entry.level >= Level.STRIKE))
+    .slice(-600).map((entry) => ({
+      seq: Number.isSafeInteger(entry.seq) ? Math.max(0, Math.min(100000, entry.seq)) : 0,
+      t: Number.isFinite(Number(entry.t)) ? Math.max(0, Number(entry.t)) : 0,
+      elapsed: Number.isFinite(Number(entry.elapsed)) ? Math.max(0, Math.min(86400, Number(entry.elapsed))) : 0,
+      type: typeof entry.type === 'string' && !/data:image\//i.test(entry.type) ? entry.type.slice(0, 100) : '',
+      level: [0, 1, 2].includes(entry.level) ? entry.level : 0,
+      message: typeof entry.message === 'string' && !/data:image\//i.test(entry.message) ? entry.message.slice(0, 500) : '',
+      ...(Number.isSafeInteger(entry.strike) ? { strike: entry.strike } : {})
+    }));
 }
 
 export function minimalOutboxPackage(pkg) {
@@ -278,11 +366,15 @@ export function minimalOutboxPackage(pkg) {
       sessionId: pkg.submission ? pkg.submission.sessionId : '',
       checksum: pkg.checksum,
       thumbs: [],
-      ledger: (pkg.forensics && Array.isArray(pkg.forensics.ledger))
-        ? pkg.forensics.ledger.filter((e) => e.level >= Level.STRIKE)
-        : []
+      ledger: safeOutboxLedger(pkg.forensics && pkg.forensics.ledger, true)
     }
   };
+}
+
+function stripLocalStills(pkg) {
+  if (!pkg?.forensics) return;
+  if (pkg.forensics.baseline) delete pkg.forensics.baseline.photo;
+  pkg.forensics.thumbs = [];
 }
 
 function writeOutbox(v) {
@@ -320,20 +412,26 @@ async function commitToFirebase(pkg) {
 export async function dispatch(pkg, onRetrySuccess) {
   const status = { firebase: 'offline-mode', jotform: 'disabled' };
 
-  if (fb.isReady()) {
-    try {
-      await commitToFirebase(pkg);
-      status.firebase = 'recorded';
-      writeOutbox(null);
-    } catch (err) {
-      console.warn('[submission] firebase commit failed, queued for retry:', err.message);
-      writeOutbox(pkg);
-      status.firebase = 'queued';
-      scheduleRetry(pkg, onRetrySuccess);
+  try {
+    if (fb.isReady()) {
+      try {
+        await commitToFirebase(pkg);
+        status.firebase = 'recorded';
+        writeOutbox(null);
+      } catch (err) {
+        console.warn('[submission] firebase commit failed, queued for retry:', err.message);
+        const retryPackage = prepareOutboxPackage(pkg);
+        writeOutbox(pkg);
+        status.firebase = 'queued';
+        scheduleRetry(retryPackage, onRetrySuccess);
+      }
     }
+  } finally {
+    stripLocalStills(pkg);
   }
 
-  status.jotform = await sendToJotform(pkg);
+  if (status.firebase === 'recorded') status.jotform = await sendToJotform(pkg);
+  else status.jotform = fb.isReady() ? 'failed' : 'disabled';
   return status;
 }
 
@@ -344,6 +442,7 @@ function scheduleRetry(pkg, onSuccess) {
     try {
       await commitToFirebase(pkg);
       writeOutbox(null);
+      await sendToJotform(pkg);
       clearInterval(retryHandle);
       retryHandle = null;
       window.removeEventListener('online', attempt);
@@ -366,6 +465,7 @@ export async function flushOutbox() {
       identityKey: pkg.submission.identityKey
     });
     writeOutbox(null);
+      await sendToJotform(pkg);
     return true;
   } catch (err) {
     console.warn('[submission] outbox flush failed:', err.message);
@@ -378,58 +478,20 @@ export function hasOutbox() { return !!readOutbox(); }
 async function sendToJotform(pkg) {
   const jf = cfg().jotform;
   if (!jf || !jf.enabled) return 'disabled';
-  const sub = pkg.submission;
-  const summary = [
-    `${cfg().meta.event} · ${cfg().meta.round} · ${sub.paperId}`,
-    `School UID: ${sub.candidate.schoolUid}  Team: ${sub.candidate.teamId}${sub.candidate.memberId ? ` (${sub.candidate.memberId})` : ''}  Name: ${sub.candidate.name}`,
-    `Answered ${sub.answered}/${sub.total} · Marked ${sub.marked} · Strikes ${sub.strikes} · Verdict ${sub.verdict}`,
-    `Sealed ${istStamp(sub.sealedAt)} · Reason ${sub.reason}`,
-    `SHA-256 ${sub.checksum}`,
-    ...sub.items.map((it) => `Q${it.n} [${it.id}] ${it.displayed.join(',') || '—'}${it.marked ? ' (marked)' : ''} ${it.seconds}s`)
-  ].join('\n');
-
-  const values = {
-    schoolUid: sub.candidate.schoolUid,
-    teamId: sub.candidate.memberId ? `${sub.candidate.teamId} (${sub.candidate.memberId})` : sub.candidate.teamId,
-    candidateName: sub.candidate.name,
-    division: sub.candidate.division,
-    sessionId: sub.sessionId,
-    answered: `${sub.answered}/${sub.total}`,
-    verdict: sub.verdict,
-    checksum: sub.checksum,
-    responsesJson: JSON.stringify(sub.items.map((it) => ({ n: it.n, id: it.id, sel: it.original, marked: it.marked, s: it.seconds }))),
-    summaryText: summary
-  };
-
   try {
-    if (jf.webhookUrl) {
-      const token = await fb.getIdToken().catch(() => null);
-      const headers = { 'Content-Type': 'application/json' };
-      if (token) headers['Authorization'] = `Bearer ${token}`;
-
-      const res = await fetch(jf.webhookUrl, {
-        method: 'POST',
-        headers,
-        body: JSON.stringify({
-          ...values,
-          formId: jf.formId,
-          package: pkg
-        }),
-        keepalive: true
-      });
-      if (!res.ok) {
-        const text = await res.text().catch(() => '');
-        console.warn(`[submission] webhook rejected (${res.status}):`, text);
-        return 'failed';
-      }
-    } else {
-      const form = new FormData();
-      form.append('formID', jf.formId);
-      Object.entries(jf.fieldMap || {}).forEach(([key, field]) => {
-        if (field && values[key] != null) form.append(field, values[key]);
-      });
-      // Jotform does not send CORS headers; an opaque response is the best confirmation available.
-      await fetch(`${jf.submitUrl}${jf.formId}`, { method: 'POST', body: form, mode: 'no-cors', keepalive: true });
+    const endpoint = new URL('/api/submit', location.href);
+    if (endpoint.origin !== location.origin || endpoint.pathname !== '/api/submit' || endpoint.search || endpoint.hash) return 'failed';
+    const token = await fb.getIdToken().catch(() => null);
+    if (!token) return 'failed';
+    const res = await fetch(endpoint, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ package: { submission: pkg.submission } }),
+      signal: AbortSignal.timeout(12000)
+    });
+    if (!res.ok) {
+      console.warn(`[submission] Jotform relay rejected (${res.status})`);
+      return 'failed';
     }
     return 'dispatched';
   } catch (err) {

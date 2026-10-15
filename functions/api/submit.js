@@ -1,236 +1,180 @@
-/**
- * functions/api/submit.js
- * -----------------------
- * Cloudflare Pages Function (Worker) webhook relay for Quizzitch submissions to Jotform.
- * 
- * Routes to: POST /api/submit
- * 
- * Security & Reliability:
- *   1. Authenticates Firebase Auth ID Token (JWT) via Google Identity Toolkit REST API.
- *   2. Validates identity: caller UID must match payload package UID.
- *   3. Enforces payload shape, size cap (<= 500 KB), and valid fields.
- *   4. Verifies salted SHA-256 cryptographic checksum.
- *   5. Idempotent on sessionId (in-memory per-isolate registry).
- *   6. Forwards to Jotform REST API using env.JOTFORM_API_KEY (Cloudflare secret).
- *   7. Safe failure: Jotform mirror errors never affect Firestore authoritative status.
- */
-
-const SUBMITTED_SESSIONS = new Set();
-
-function jsonResponse(data, status = 200, origin = '*') {
-  return new Response(JSON.stringify(data), {
-    status,
-    headers: {
-      'Content-Type': 'application/json',
-      'Access-Control-Allow-Origin': origin,
-      'Access-Control-Allow-Methods': 'POST, OPTIONS',
-      'Access-Control-Allow-Headers': 'Content-Type, Authorization',
-      'Cache-Control': 'no-store'
-    }
-  });
-}
+import { authenticate, allowedOrigin, commitWrites, getDocument, json, jsonDepthWithin, readLimitedBody, HttpError } from '../_lib/firebase-admin.js';
+import { enforceActionRateLimit, enforceIpRateLimit, enforceUserRateLimit } from '../_lib/rate-limit.js';
 
 function canonicalJSON(value) {
   if (value === null || typeof value !== 'object') return JSON.stringify(value);
   if (Array.isArray(value)) return `[${value.map(canonicalJSON).join(',')}]`;
-  const keys = Object.keys(value).filter((k) => value[k] !== undefined).sort();
-  return `{${keys.map((k) => `${JSON.stringify(k)}:${canonicalJSON(value[k])}`).join(',')}}`;
+  const keys = Object.keys(value).filter((key) => value[key] !== undefined).sort();
+  return `{${keys.map((key) => `${JSON.stringify(key)}:${canonicalJSON(value[key])}`).join(',')}}`;
 }
 
-async function sha256Hex(str) {
-  const buf = new TextEncoder().encode(str);
-  const digest = await crypto.subtle.digest('SHA-256', buf);
-  return Array.from(new Uint8Array(digest), (b) => b.toString(16).padStart(2, '0')).join('');
+async function digest(value) {
+  const bytes = new TextEncoder().encode(value);
+  const result = await crypto.subtle.digest('SHA-256', bytes);
+  return Array.from(new Uint8Array(result), (byte) => byte.toString(16).padStart(2, '0')).join('');
 }
 
-async function verifyChecksum(pkg) {
-  const sub = pkg && pkg.submission;
-  if (!sub || !sub.salt || !sub.checksum) return false;
-  const body = {};
-  for (const [k, v] of Object.entries(sub)) {
-    if (k !== 'checksum' && k !== 'checksumAlgo') body[k] = v;
-  }
-  const raw = `${sub.salt}|${canonicalJSON(body)}`;
-  const recomputed = await sha256Hex(raw);
-  return recomputed.toLowerCase() === sub.checksum.toLowerCase();
+async function checksumValid(submission) {
+  const body = Object.fromEntries(Object.entries(submission).filter(([key]) => key !== 'checksum' && key !== 'checksumAlgo'));
+  return (await digest(`${submission.salt}|${canonicalJSON(body)}`)) === String(submission.checksum || '').toLowerCase();
 }
 
-async function verifyFirebaseToken(idToken, webApiKey, projectId) {
-  if (!idToken) throw { status: 401, message: 'Missing Authorization Bearer token' };
-
-  // Use Google Identity Toolkit accounts:lookup with the web API key
-  const url = `https://identitytoolkit.googleapis.com/v1/accounts:lookup?key=${encodeURIComponent(webApiKey)}`;
-  const resp = await fetch(url, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ idToken })
-  });
-
-  if (!resp.ok) {
-    // Fallback: verify via Google's tokeninfo endpoint
-    const fallbackUrl = `https://oauth2.googleapis.com/tokeninfo?id_token=${encodeURIComponent(idToken)}`;
-    const fbResp = await fetch(fallbackUrl);
-    if (!fbResp.ok) {
-      throw { status: 401, message: 'Invalid or expired Firebase Auth token' };
-    }
-    const claims = await fbResp.json();
-    if (projectId && claims.aud !== projectId) {
-      throw { status: 403, message: `Token audience mismatch (expected ${projectId})` };
-    }
-    return claims.sub || claims.user_id;
-  }
-
-  const data = await resp.json();
-  const user = data.users && data.users[0];
-  if (!user || !user.localId) {
-    throw { status: 401, message: 'Invalid token payload' };
-  }
-  return user.localId;
+function summary(submission) {
+  const candidate = submission.candidate;
+  return [
+    `CelesteCon 2026 · Preliminary Screening · ${submission.paperId}`,
+    `School UID: ${candidate.schoolUid}  Team: ${candidate.teamId}${candidate.memberId ? ` (${candidate.memberId})` : ''}  Name: ${candidate.name}`,
+    `Answered ${submission.serverAnswered ?? submission.answered}/${submission.total} · Marked ${submission.serverMarked ?? submission.marked} · Client-reported strikes ${submission.clientReportedStrikes ?? submission.strikes} · Client-reported verdict ${submission.clientReportedVerdict || submission.verdict}`,
+    `Received ${new Date(submission.receivedAt || submission.sealedAt).toISOString()} · Reason ${submission.reason}`,
+    `SHA-256 ${submission.checksum}`,
+    ...submission.items.map((item) => `Q${item.n} [${item.id}] ${item.displayed.join(',') || '—'}${item.marked ? ' (marked)' : ''} ${item.seconds}s`)
+  ].join('\n');
 }
 
-export async function onRequestOptions(context) {
-  const origin = context.request.headers.get('Origin') || '*';
-  return new Response(null, {
-    status: 204,
-    headers: {
-      'Access-Control-Allow-Origin': origin,
-      'Access-Control-Allow-Methods': 'POST, OPTIONS',
-      'Access-Control-Allow-Headers': 'Content-Type, Authorization',
-      'Access-Control-Max-Age': '86400'
-    }
-  });
+export async function onRequestOptions({ request, env }) {
+  const origin = allowedOrigin(request, env);
+  if (origin === false) return json({ error: 'Origin not allowed' }, 403);
+  return new Response(null, { status: 204, headers: {
+    ...(origin ? { 'Access-Control-Allow-Origin': origin } : {}),
+    'Access-Control-Allow-Methods': 'POST, OPTIONS',
+    'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+    'Access-Control-Max-Age': '600',
+    'Vary': 'Origin'
+  } });
 }
 
-export async function onRequestPost(context) {
-  const { request, env } = context;
-  const origin = request.headers.get('Origin') || '*';
-
-  // Enforce payload size limit (max 500 KB)
-  const contentLength = parseInt(request.headers.get('content-length') || '0', 10);
-  if (contentLength > 512 * 1024) {
-    return jsonResponse({ error: 'Payload too large (max 500 KB)' }, 413, origin);
-  }
-
-  const apiKey = env.JOTFORM_API_KEY;
-  if (!apiKey) {
-    return jsonResponse({ error: 'JOTFORM_API_KEY is not configured on Cloudflare' }, 503, origin);
-  }
-
-  const firebaseApiKey = env.FIREBASE_WEB_API_KEY || 'FIREBASE_API_KEY_PLACEHOLDER';
-  const firebaseProjectId = env.FIREBASE_PROJECT_ID || 'quizzitch-14998';
-  const jotformApiBase = env.JOTFORM_API_BASE || 'https://api.jotform.com';
-
+export async function onRequestPost({ request, env }) {
+  const origin = allowedOrigin(request, env);
+  if (origin === false) return json({ error: 'Origin not allowed' }, 403);
   try {
-    const authHeader = request.headers.get('authorization') || request.headers.get('Authorization') || '';
-    if (!authHeader.startsWith('Bearer ')) {
-      return jsonResponse({ error: 'Authorization: Bearer <token> required' }, 401, origin);
-    }
-    const idToken = authHeader.slice(7).trim();
-
-    const authUid = await verifyFirebaseToken(idToken, firebaseApiKey, firebaseProjectId);
-
-    const rawBody = await request.text();
-    if (rawBody.length > 512 * 1024) {
-      return jsonResponse({ error: 'Payload too large' }, 413, origin);
-    }
-
+    enforceIpRateLimit(request.headers.get('CF-Connecting-IP'));
+    const contentLength = Number(request.headers.get('content-length') || 0);
+    if (contentLength > 600 * 1024) return json({ error: 'Payload too large' }, 413, origin);
+    const { uid } = await authenticate(request, env);
+    enforceUserRateLimit(uid);
+    enforceActionRateLimit(uid, 'submit');
+    const rawBody = await readLimitedBody(request, 600 * 1024);
+    if (!jsonDepthWithin(rawBody)) throw new HttpError(400, 'JSON nesting is too deep');
     let payload;
+    try { payload = JSON.parse(rawBody); } catch (_) { throw new HttpError(400, 'Malformed JSON payload'); }
+    const sub = payload && payload.package && payload.package.submission;
+    if (!sub || sub.uid !== uid || typeof sub.sessionId !== 'string' || !sub.candidate || !sub.checksum || !(await checksumValid(sub))) {
+      throw new HttpError(422, 'Invalid or mismatched sealed submission');
+    }
+    const stored = await getDocument(env, `submissions/${uid}`);
+    if (!stored || stored.data.checksum !== sub.checksum || stored.data.sessionId !== sub.sessionId) {
+      throw new HttpError(403, 'Only the authoritative sealed Firestore submission may be mirrored');
+    }
+    const submission = stored.data;
+    const apiKey = env.JOTFORM_API_KEY;
+    const formId = env.JOTFORM_FORM_ID || '262450769915063';
+    const apiBase = env.JOTFORM_API_BASE || 'https://api.jotform.com';
+    if (!apiKey) throw new HttpError(503, 'Jotform server credentials are not configured');
+    if (!/^\d+$/.test(formId) || !/^https:\/\/(?:api|eu-api|hipaa-api)\.jotform\.com$/.test(apiBase)) {
+      throw new HttpError(503, 'Jotform relay configuration is invalid');
+    }
+
+    const mirrorPath = `jotform_mirror/${uid}`;
+    const existing = await getDocument(env, mirrorPath);
+    if (existing && existing.data.checksum !== sub.checksum) {
+      throw new HttpError(409, 'A different Jotform mirror is already recorded for this account; reconcile it manually');
+    }
+    if (existing && existing.data.status === 'recorded' && existing.data.checksum === sub.checksum) {
+      return json({ status: 'recorded', idempotent: true }, 200, origin);
+    }
+    if (existing && existing.data.status === 'uncertain' && existing.data.checksum === sub.checksum) {
+      return json({ status: 'uncertain', message: 'Check Jotform before retrying this mirror' }, 409, origin);
+    }
+    if (existing && existing.data.status === 'pending') {
+      const age = Date.now() - Number(existing.data.updatedAt || 0);
+      if (age < 15 * 60 * 1000) return json({ status: 'pending', message: 'A Jotform mirror request is already in progress' }, 202, origin);
+      return json({ status: 'uncertain', message: 'Check Jotform and reconcile the stale mirror before retrying' }, 409, origin);
+    }
+    const pending = { uid, sessionId: sub.sessionId, checksum: sub.checksum, status: 'pending', updatedAt: Date.now() };
+    let postAttempted = false;
     try {
-      payload = JSON.parse(rawBody);
-    } catch (_) {
-      return jsonResponse({ error: 'Malformed JSON payload' }, 400, origin);
+      await commitWrites(env, [existing
+        ? { path: mirrorPath, data: pending, updateTime: existing.updateTime }
+        : { path: mirrorPath, data: pending, create: true }]);
+    } catch (error) {
+      if (error.status === 409) return json({ status: 'pending' }, 202, origin);
+      throw error;
     }
 
-    if (!payload || !payload.formId || !payload.sessionId || !payload.schoolUid || !payload.teamId) {
-      return jsonResponse({ error: 'Missing required submission fields' }, 400, origin);
-    }
-
-    // Require caller UID matches submission package UID
-    const subUid = payload.package && payload.package.submission && payload.package.submission.uid;
-    if (subUid && subUid !== authUid) {
-      return jsonResponse({ error: 'Identity mismatch: token UID does not match submission package' }, 403, origin);
-    }
-
-    // Idempotency: return recorded if already mirrored
-    if (SUBMITTED_SESSIONS.has(payload.sessionId)) {
-      return jsonResponse({
-        status: 'recorded',
-        idempotent: true,
-        sessionId: payload.sessionId,
-        message: 'Session already mirrored to Jotform'
-      }, 200, origin);
-    }
-
-    // Verify cryptographic checksum if package is attached
-    if (payload.package) {
-      const valid = await verifyChecksum(payload.package);
-      if (!valid) {
-        return jsonResponse({ error: 'Cryptographic checksum mismatch: payload tampered' }, 422, origin);
+    try {
+      const questionsResponse = await fetch(`${apiBase}/form/${encodeURIComponent(formId)}/questions`, {
+        headers: { APIKEY: apiKey }, redirect: 'error', signal: AbortSignal.timeout(15000)
+      });
+      if (!questionsResponse.ok) throw new Error('Failed to fetch Jotform field definitions');
+      const questionData = await questionsResponse.json();
+      if (questionData.responseCode !== 200 || !questionData.content || typeof questionData.content !== 'object') {
+        throw new Error('Jotform returned invalid field definitions');
       }
-    }
-
-    // Map questions on the form
-    const questionsUrl = `${jotformApiBase}/form/${encodeURIComponent(payload.formId)}/questions?apiKey=${encodeURIComponent(apiKey)}`;
-    const qResp = await fetch(questionsUrl);
-    if (!qResp.ok) {
-      return jsonResponse({ error: 'Failed to fetch Jotform form fields' }, 502, origin);
-    }
-    const qData = await qResp.json();
-    const questions = qData.content || {};
-    const nameToQid = {};
-    for (const [qid, q] of Object.entries(questions)) {
-      if (q && q.name) nameToQid[q.name] = qid;
-    }
-
-    // Build URL-encoded form data
-    const submissionBody = new URLSearchParams();
-    const fields = {
-      schoolUid: payload.schoolUid,
-      teamId: payload.teamId,
-      candidateName: payload.candidateName,
-      division: payload.division,
-      sessionId: payload.sessionId,
-      answered: payload.answered,
-      verdict: payload.verdict,
-      checksum: payload.checksum,
-      responsesJson: payload.responsesJson,
-      summaryText: payload.summaryText
-    };
-
-    for (const [fieldName, val] of Object.entries(fields)) {
-      const qid = nameToQid[fieldName];
-      if (qid && val != null) {
-        submissionBody.append(`submission[${qid}]`, String(val));
+      const nameToQid = new Map();
+      for (const [qid, question] of Object.entries(questionData.content || {})) {
+        if (!/^\d+$/.test(qid) || !question || typeof question.name !== 'string' || !question.name) continue;
+        if (nameToQid.has(question.name)) throw new Error(`Jotform field name is ambiguous: ${question.name}`);
+        nameToQid.set(question.name, qid);
       }
+      const candidate = submission.candidate;
+      const fields = {
+        schoolUid: candidate.schoolUid,
+        teamId: candidate.memberId ? `${candidate.teamId} (${candidate.memberId})` : candidate.teamId,
+        candidateName: candidate.name,
+        division: candidate.division,
+        sessionId: submission.sessionId,
+        answered: `${submission.serverAnswered ?? submission.answered}/${submission.total}`,
+        verdict: submission.clientReportedVerdict || submission.verdict,
+        checksum: submission.checksum,
+        responsesJson: JSON.stringify(submission.items.map((item) => ({ n: item.n, id: item.id, sel: item.original, marked: item.marked, s: item.seconds }))),
+        summaryText: summary(submission)
+      };
+      const form = new URLSearchParams();
+      for (const [fieldName, value] of Object.entries(fields)) {
+        const qid = nameToQid.get(fieldName);
+        if (!qid) throw new Error(`Jotform form is missing required field: ${fieldName}`);
+        if (value != null) form.append(`submission[${qid}]`, String(value));
+      }
+      postAttempted = true;
+      const postResponse = await fetch(`${apiBase}/form/${encodeURIComponent(formId)}/submissions`, {
+        method: 'POST',
+        redirect: 'error',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded', APIKEY: apiKey },
+        body: form.toString(),
+        signal: AbortSignal.timeout(15000)
+      });
+      if (!postResponse.ok) throw new Error('Jotform rejected the submission');
+      const postData = await postResponse.json().catch(() => ({}));
+      const jotformSubmissionId = postData.content?.submissionID;
+      if (postData.responseCode !== 200 || !/^[0-9]+$/.test(String(jotformSubmissionId || ''))) {
+        throw new Error('Jotform did not confirm a submission ID');
+      }
+      const current = await getDocument(env, mirrorPath);
+      if (!current || current.data.status !== 'pending' || current.data.updatedAt !== pending.updatedAt) {
+        throw new HttpError(409, 'Jotform mirror lock changed before recording the result');
+      }
+      await commitWrites(env, [{
+        path: mirrorPath,
+        data: { ...pending, status: 'recorded', jotformSubmissionId: String(jotformSubmissionId), updatedAt: Date.now() },
+        merge: true,
+        updateTime: current.updateTime
+      }]);
+      return json({ status: 'recorded', checksum: submission.checksum }, 200, origin);
+    } catch (error) {
+      const current = await getDocument(env, mirrorPath).catch(() => null);
+      if (current && current.data.status === 'pending' && current.data.updatedAt === pending.updatedAt) {
+        await commitWrites(env, [{
+          path: mirrorPath,
+          data: { ...pending, status: postAttempted ? 'uncertain' : 'failed', updatedAt: Date.now() },
+          merge: true,
+          updateTime: current.updateTime
+        }]).catch(() => {});
+      }
+      if (error.status === 409) throw error;
+      throw new HttpError(502, postAttempted ? 'Jotform result is uncertain; check Jotform before retrying' : 'Jotform mirror failed before submission');
     }
-
-    // Dispatch to Jotform
-    const submitUrl = `${jotformApiBase}/form/${encodeURIComponent(payload.formId)}/submissions?apiKey=${encodeURIComponent(apiKey)}`;
-    const postResp = await fetch(submitUrl, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      body: submissionBody.toString()
-    });
-
-    if (!postResp.ok) {
-      const errText = await postResp.text().catch(() => '');
-      return jsonResponse({ error: `Jotform API error: ${errText}` }, 502, origin);
-    }
-
-    const postJson = await postResp.json().catch(() => ({}));
-    const submissionID = postJson.content && postJson.content.submissionID;
-
-    SUBMITTED_SESSIONS.add(payload.sessionId);
-
-    return jsonResponse({
-      status: 'recorded',
-      jotformSubmissionId: submissionID,
-      checksum: payload.checksum,
-      timestamp: Date.now()
-    }, 200, origin);
-  } catch (err) {
-    const status = err.status || 500;
-    const msg = err.message || 'Internal server error';
-    return jsonResponse({ error: msg }, status, origin);
+  } catch (error) {
+    const status = error.status || 500;
+    return json({ error: status >= 500 ? 'Jotform relay is temporarily unavailable' : error.message || 'Request failed' }, status, origin);
   }
 }

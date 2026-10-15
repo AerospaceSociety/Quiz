@@ -10,6 +10,7 @@
    ========================================================================== */
 
 const SDK = 'https://www.gstatic.com/firebasejs/10.12.2';
+import { sha256Hex } from './util.js';
 
 let fs = null;        // firebase-firestore module namespace
 let fa = null;        // firebase-auth module namespace
@@ -17,6 +18,7 @@ let db = null;
 let auth = null;
 let ready = false;
 let cfg = null;
+let candidateIdentityKey = '';
 
 /* --- 00 · DEBUG OPERATION COUNTER (Quota Protection) ---------------------- */
 const stats = {
@@ -62,7 +64,7 @@ export const getIdToken = (force = false) => (auth && auth.currentUser ? auth.cu
 export async function initFirebase(config) {
   if (ready) return true;
   cfg = config || null;
-  if (!cfg || cfg.enabled === false || !cfg.projectId) return false;
+  if (!cfg || cfg.enabled === false || !cfg.projectId || String(cfg.projectId).includes('PLACEHOLDER') || String(cfg.apiKey).includes('PLACEHOLDER')) return false;
   try {
     const [appMod, fsMod, faMod] = await Promise.all([
       import(`${SDK}/firebase-app.js`),
@@ -116,15 +118,11 @@ export async function signInCandidate() {
  */
 export async function serverTimeSample(mono) {
   if (!ready || !auth.currentUser) throw new Error('firebase not ready');
-  const ref = d('time_sync', auth.currentUser.uid);
   const t0 = mono();
-  trackOp('write', 'time_sync');
-  await fs.setDoc(ref, { t: ts() });
+  const response = await candidateRequest('time', {});
   const t1 = mono();
-  trackOp('read', 'time_sync');
-  const snap = await fs.getDocFromServer(ref);
-  const server = toMs(snap.get('t'));
-  if (!server) throw new Error('server timestamp missing');
+  const server = Number(response.server);
+  if (!Number.isFinite(server) || server <= 0) throw new Error('server timestamp missing');
   return { server, t0, t1 };
 }
 
@@ -142,47 +140,42 @@ export function watchControl(cb) {
       durationSeconds: Number(data.durationSeconds) || 0,
       extensionSeconds: Number(data.extensionSeconds) || 0,
       updatedAtMs: toMs(data.updatedAt),
-      updatedBy: data.updatedBy || ''
     });
   }, (err) => console.warn('[firebase] control listener:', err.message));
 }
 
+export function watchStillsPurge(cb) {
+  if (!ready) return () => {};
+  return fs.onSnapshot(d('privacy_controls', 'stills'), (snap) => {
+    trackOp('read', 'privacy_controls');
+    cb(snap.exists() ? snap.data() : null);
+  }, (err) => console.warn('[firebase] still purge listener:', err.message));
+}
+
 /* --- 05 · CANDIDATE READS ------------------------------------------------- */
-/** Question bank. firestore.rules only permit this read while the paper is released. */
-export async function fetchQuestions() {
+/** Fetch only the signed-in candidate's server-generated paper. */
+export async function fetchPaper() {
   if (!ready) return null;
-  const colName = cfg.questionsCollection || 'quizzitch_questions';
-  const snap = await fs.getDocs(fs.collection(db, colName));
-  trackOp('read', colName, snap.size);
-  const list = [];
-  snap.forEach((doc) => list.push({ id: doc.id, ...doc.data() }));
-  return list;
+  const result = await candidateRequest('paper', {});
+  trackOp('read', cfg.questionsCollection || 'quizzitch_questions', result.paper.length);
+  return result.paper;
 }
 
-/** registrations/{schoolUid} → { schoolName, teams: { [teamId]: { name, members: [..] } } } */
-export async function fetchRoster(schoolUid) {
-  if (!ready) return null;
-  try {
-    trackOp('read', 'registrations');
-    const snap = await fs.getDoc(d('registrations', schoolUid));
-    return snap.exists() ? snap.data() : null;
-  } catch (err) {
-    console.warn('[firebase] roster lookup:', err.message);
-    return null;
+async function candidateRequest(action, payload) {
+  if (!ready || !auth.currentUser) throw new Error('Firebase authentication is not ready');
+  const idToken = await auth.currentUser.getIdToken();
+  const response = await fetch('/api/candidate', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${idToken}` },
+    body: JSON.stringify({ action, ...payload })
+  });
+  const body = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    const error = new Error(body.error || `Candidate service failed (${response.status})`);
+    error.status = response.status;
+    throw error;
   }
-}
-
-/** Fetch a single candidate roster entry from roster/{identityKey} */
-export async function fetchRosterEntry(identityKey) {
-  if (!ready || !identityKey) return null;
-  try {
-    trackOp('read', 'roster');
-    const snap = await fs.getDoc(d('roster', identityKey));
-    return snap.exists() ? snap.data() : null;
-  } catch (err) {
-    console.warn('[firebase] roster entry lookup:', err.message);
-    return null;
-  }
+  return body;
 }
 
 /**
@@ -190,30 +183,22 @@ export async function fetchRosterEntry(identityKey) {
  * candidate, and no second sitting after a sealed submission.
  * @returns {{ ok: boolean, reason?: 'ACTIVE_ELSEWHERE'|'ALREADY_SUBMITTED'|'NOT_ROSTERED' }}
  */
-export async function claimIdentity(key, profile) {
-  if (!ready) return { ok: true };
-  const uid = auth.currentUser.uid;
-  const ref = d('identities', key);
-  try {
-    return await fs.runTransaction(db, async (tx) => {
-      trackOp('read', 'identities');
-      const snap = await tx.get(ref);
-      if (snap.exists()) {
-        const cur = snap.data();
-        if (cur.state === 'sealed') return { ok: false, reason: 'ALREADY_SUBMITTED' };
-        if (cur.uid !== uid) return { ok: false, reason: 'ACTIVE_ELSEWHERE' };
-        trackOp('write', 'identities');
-        tx.update(ref, { updatedAt: ts() });
-      } else {
-        trackOp('write', 'identities');
-        tx.set(ref, { uid, state: 'active', ...profile, createdAt: ts(), updatedAt: ts() });
-      }
-      return { ok: true };
-    });
-  } catch (err) {
-    if (err.code === 'permission-denied' || (err.message && err.message.toLowerCase().includes('permission'))) {
-      return { ok: false, reason: 'NOT_ROSTERED' };
+export async function claimIdentity(claimCode, profile) {
+  if (!ready) {
+    if (cfg && cfg.enabled === false) {
+      const identityKey = (await sha256Hex(`local-rehearsal|${profile.schoolUid}|${profile.teamId}|${profile.name}`)).slice(0, 40);
+      return { ok: true, identityKey, profile };
     }
+    throw new Error('Firebase is unavailable; live candidate sign-in is disabled.');
+  }
+  try {
+    const result = await candidateRequest('claim', { claimCode, ...profile });
+    candidateIdentityKey = result.identityKey;
+    trackOp('write', 'identities');
+    return { ok: true, identityKey: result.identityKey, profile: result.profile };
+  } catch (err) {
+    if (err.status === 403) return { ok: false, reason: 'NOT_ROSTERED' };
+    if (err.status === 409) return { ok: false, reason: /already submitted/i.test(err.message) ? 'ALREADY_SUBMITTED' : 'ACTIVE_ELSEWHERE' };
     throw err;
   }
 }
@@ -234,9 +219,8 @@ export async function getOwnSession() {
 export async function writeSession(data) {
   if (!ready || !auth.currentUser) return false;
   try {
-    const uid = auth.currentUser.uid;
     trackOp('write', 'sessions');
-    await fs.setDoc(d('sessions', uid), { ...data, uid, heartbeatAt: ts() }, { merge: true });
+    await candidateRequest('session', { identityKey: data.identityKey || candidateIdentityKey, data });
     return true;
   } catch (err) {
     console.warn('[firebase] session write:', err.message);
@@ -248,7 +232,7 @@ export async function writeEvent(id, data) {
   if (!ready || !auth.currentUser) return false;
   try {
     trackOp('write', 'events');
-    await fs.setDoc(d('events', id), { ...data, uid: auth.currentUser.uid, ts: ts() });
+    await candidateRequest('event', { identityKey: data.identityKey || candidateIdentityKey, eventId: id, data });
     return true;
   } catch (err) {
     console.warn('[firebase] event write:', err.message);
@@ -256,11 +240,9 @@ export async function writeEvent(id, data) {
   }
 }
 
-let localEventSeq = 0;
 export async function pushEvent(data) {
   if (!ready || !auth.currentUser) return false;
-  if (localEventSeq >= 80) return false;
-  const id = `${auth.currentUser.uid}_${localEventSeq++}`;
+  const id = crypto.randomUUID().replace(/-/g, '');
   return writeEvent(id, data);
 }
 
@@ -269,7 +251,7 @@ export async function writeForensicsBaseline(data) {
   if (!ready || !auth.currentUser) return false;
   try {
     trackOp('write', 'forensics');
-    await fs.setDoc(d('forensics', auth.currentUser.uid), { ...data, uid: auth.currentUser.uid, updatedAt: ts() }, { merge: true });
+    await candidateRequest('baseline', { identityKey: data.identityKey || candidateIdentityKey, data });
     return true;
   } catch (err) {
     console.warn('[firebase] forensics write:', err.message);
@@ -285,56 +267,12 @@ export async function writeForensicsBaseline(data) {
  */
 export async function commitSubmission({ submission, forensics, session, identityKey }) {
   if (!ready || !auth.currentUser) throw new Error('firebase not ready');
-  const uid = auth.currentUser.uid;
-
-  // Idempotency check: if submission already recorded, return true immediately
-  try {
-    const snap = await fs.getDoc(d('submissions', uid));
-    trackOp('read', 'submissions');
-    if (snap.exists()) {
-      console.info('[firebase] submission already exists, treating seal as successful');
-      return true;
-    }
-  } catch (_) {
-    // If check fails (e.g. offline), proceed to commit attempt
-  }
-
-  // Best-effort forensics write (committed independently so doc size never breaks core submission)
-  if (forensics) {
-    try {
-      trackOp('write', 'forensics');
-      await fs.setDoc(d('forensics', uid), { ...forensics, uid, updatedAt: ts() }, { merge: true });
-    } catch (fErr) {
-      console.warn('[firebase] forensics doc write failed, attempting trimmed forensics:', fErr.message);
-      try {
-        const trimmed = {
-          sessionId: forensics.sessionId,
-          checksum: forensics.checksum,
-          thumbs: [],
-          ledger: (forensics.ledger || []).filter((e) => e.level >= 2),
-          uid,
-          updatedAt: ts()
-        };
-        trackOp('write', 'forensics');
-        await fs.setDoc(d('forensics', uid), trimmed, { merge: true });
-      } catch (fErr2) {
-        console.warn('[firebase] trimmed forensics write failed; proceeding to core submission:', fErr2.message);
-      }
-    }
-  }
-
-  // Core submission batch: submission doc, final session state, and identity seal
-  const batch = fs.writeBatch(db);
-  batch.set(d('submissions', uid), { ...submission, uid, receivedAt: ts() });
+  const result = await candidateRequest('seal', { identityKey, package: { submission, forensics }, session });
   trackOp('write', 'submissions');
-  batch.set(d('sessions', uid), { ...session, uid, heartbeatAt: ts() }, { merge: true });
   trackOp('write', 'sessions');
-  if (identityKey) {
-    batch.set(d('identities', identityKey), { uid, state: 'sealed', updatedAt: ts() }, { merge: true });
-    trackOp('write', 'identities');
-  }
-  await batch.commit();
-  return true;
+  trackOp('write', 'identities');
+  if (forensics) trackOp('write', 'forensics');
+  return result.recorded === true;
 }
 
 /* --- 07 · ADMIN AUTH ------------------------------------------------------ */
@@ -410,34 +348,40 @@ export async function getAllForensics() {
  */
 export async function purgeForensicStills() {
   if (!ready) throw new Error('Firebase is not configured.');
-  trackOp('read', 'forensics');
-  const snap = await fs.getDocs(fs.collection(db, 'forensics'));
-  trackOp('read', 'forensics', snap.size);
-  if (snap.empty) return 0;
-
-  const docsToUpdate = [];
-  snap.forEach((docSnap) => {
-    const data = docSnap.data();
-    const hasPhoto = data.baseline && typeof data.baseline === 'object' && data.baseline.photo;
-    const hasThumbs = Array.isArray(data.thumbs) && data.thumbs.length > 0;
-    if (hasPhoto || hasThumbs || !data.stillsPurgedAt) {
-      docsToUpdate.push({ ref: docSnap.ref, hasPhoto: !!hasPhoto });
-    }
-  });
-
+  const control = await fs.getDoc(d('exam_control', 'status'));
+  trackOp('read', 'exam_control');
+  const purgedStartedAt = control.exists() ? (toMs(control.get('startedAt')) || 0) : 0;
+  const marker = { purgedStartedAt, updatedAt: ts() };
+  const markerBatch = fs.writeBatch(db);
+  markerBatch.set(d('privacy_controls', 'stills'), marker, { merge: true });
+  markerBatch.set(d('privacy_controls', 'stills_guard'), marker, { merge: true });
+  trackOp('write', 'privacy_controls', 2);
+  await markerBatch.commit();
+  const targets = [];
+  for (const collectionName of ['forensics', 'events']) {
+    trackOp('read', collectionName);
+    const snap = await fs.getDocs(fs.collection(db, collectionName));
+    trackOp('read', collectionName, snap.size);
+    snap.forEach((docSnap) => {
+      const data = docSnap.data();
+      const hasPhoto = collectionName === 'forensics' && data.baseline && typeof data.baseline === 'object'
+        && Object.prototype.hasOwnProperty.call(data.baseline, 'photo');
+      const hasThumbs = collectionName === 'forensics'
+        ? Object.prototype.hasOwnProperty.call(data, 'thumbs')
+        : Object.prototype.hasOwnProperty.call(data, 'thumb');
+      if (hasPhoto || hasThumbs) targets.push({ collectionName, ref: docSnap.ref, hasPhoto });
+    });
+  }
   let count = 0;
-  for (let i = 0; i < docsToUpdate.length; i += 400) {
-    const chunk = docsToUpdate.slice(i, i + 400);
+  for (let i = 0; i < targets.length; i += 400) {
+    const chunk = targets.slice(i, i + 400);
     const batch = fs.writeBatch(db);
     for (const item of chunk) {
-      trackOp('write', 'forensics');
-      const patch = {
-        thumbs: [],
-        stillsPurgedAt: ts()
-      };
-      if (item.hasPhoto) {
-        patch['baseline.photo'] = fs.deleteField();
-      }
+      trackOp('write', item.collectionName);
+      const patch = { stillsPurgedAt: ts() };
+      if (item.collectionName === 'forensics') patch.thumbs = [];
+      else patch.thumb = fs.deleteField();
+      if (item.hasPhoto) patch['baseline.photo'] = fs.deleteField();
       batch.update(item.ref, patch);
       count++;
     }
@@ -456,46 +400,118 @@ export async function getAllEvents() {
 }
 
 /** status: 'waiting' | 'active' | 'ended'. Starting stamps the authoritative server start time. */
-export async function setControl(patch, byEmail) {
+export async function setControl(patch) {
   if (!ready) throw new Error('Firebase is not configured.');
-  const body = { ...patch, updatedAt: ts(), updatedBy: byEmail || '' };
+  const body = { ...patch, updatedAt: ts(), updatedBy: fs.deleteField() };
   if (patch.status === 'active' && patch.restart) {
     delete body.restart;
     body.startedAt = ts();
     body.extensionSeconds = 0;
+    body.eventEndedAt = fs.deleteField();
+    body.retentionPurgedAt = fs.deleteField();
+  } else if (patch.status === 'ended') {
+    body.eventEndedAt = ts();
   }
   trackOp('write', 'exam_control');
   await fs.setDoc(d('exam_control', 'status'), body, { merge: true });
 }
 
-export async function extendControl(seconds, byEmail) {
+export async function extendControl(seconds) {
   if (!ready) throw new Error('Firebase is not configured.');
   trackOp('write', 'exam_control');
   await fs.updateDoc(d('exam_control', 'status'), {
-    extensionSeconds: fs.increment(seconds), updatedAt: ts(), updatedBy: byEmail || ''
+    extensionSeconds: fs.increment(seconds), updatedAt: ts(), updatedBy: fs.deleteField()
   });
 }
 
 export async function seedQuestions(questions) {
   if (!ready) throw new Error('Firebase is not configured.');
+  if (!Array.isArray(questions) || !questions.length || questions.length > 1000) throw new Error('Question bank must contain 1–1,000 questions.');
+  const safeQuestions = questions.map((question) => {
+    const id = String(question?.id ?? '').trim();
+    const catId = Number(question?.catId);
+    if (!/^[A-Za-z0-9][A-Za-z0-9_-]{0,99}$/.test(id) || !Number.isSafeInteger(catId)
+      || typeof question.question !== 'string' || !question.question.trim()
+      || question.question.length > 5000 || /data:image\//i.test(question.question)
+      || (question.supplement != null && (typeof question.supplement !== 'string' || question.supplement.length > 5000 || /data:image\//i.test(question.supplement)))
+      || !Array.isArray(question.options) || question.options.length < 2 || question.options.length > 26
+      || question.options.some((option) => typeof option !== 'string' || !option.trim() || option.length > 1000 || /data:image\//i.test(option))) {
+      throw new Error(`Question ${id || '(missing ID)'} has an invalid shape.`);
+    }
+    if (question.divisions != null && (!Array.isArray(question.divisions) || question.divisions.some((division) => typeof division !== 'string'))) {
+      throw new Error(`Question ${id} has invalid division restrictions.`);
+    }
+    return {
+      id,
+      catId,
+      scheme: typeof question.scheme === 'string' && question.scheme ? question.scheme : 'standard',
+      question: question.question,
+      supplement: typeof question.supplement === 'string' ? question.supplement : '',
+      options: question.options.slice(),
+      ...(Array.isArray(question.divisions) ? { divisions: question.divisions.slice() } : {})
+    };
+  });
+  const ids = safeQuestions.map((question) => question.id);
+  if (new Set(ids).size !== ids.length) throw new Error('Question IDs must be unique.');
+  const control = await fs.getDoc(d('exam_control', 'status'));
+  if (control.exists() && control.get('status') === 'active') throw new Error('The question bank cannot be changed while a paper is active.');
+  const submissions = await fs.getDocs(fs.collection(db, 'submissions'));
+  if (!submissions.empty) throw new Error('Delete or archive prior submissions before replacing the question bank.');
+  const assignedPapers = await fs.getDocs(fs.collection(db, 'candidate_papers'));
+  if (!assignedPapers.empty) throw new Error('The question bank cannot change while candidates have assigned papers.');
   const col = cfg.questionsCollection || 'quizzitch_questions';
+  const existing = await fs.getDocs(fs.collection(db, col));
+  const keep = new Set(ids);
+  const stale = [];
+  existing.forEach((docSnap) => { if (!keep.has(docSnap.id)) stale.push(docSnap.ref); });
   let n = 0;
   for (let i = 0; i < questions.length; i += 400) {
     const batch = fs.writeBatch(db);
-    const slice = questions.slice(i, i + 400);
-    slice.forEach((q) => {
-      const { correct, ...safe } = q;          // an answer key must never land in a candidate-readable doc
-      batch.set(d(col, String(q.id)), safe);
+    const slice = safeQuestions.slice(i, i + 400);
+    slice.forEach((question) => {
+      batch.set(d(col, question.id), question);
       n++;
     });
     trackOp('write', col, slice.length);
     await batch.commit();
   }
+  for (let i = 0; i < stale.length; i += 400) {
+    const batch = fs.writeBatch(db);
+    stale.slice(i, i + 400).forEach((ref) => batch.delete(ref));
+    await batch.commit();
+  }
+  await fs.deleteDoc(d('answer_key', 'current'));
   return n;
+}
+
+async function assertAnswerKeyMatchesBank(key) {
+  if (!key || typeof key !== 'object' || Array.isArray(key)) throw new Error('Answer key must be an object keyed by question ID.');
+  const col = cfg.questionsCollection || 'quizzitch_questions';
+  const bankSnapshot = await fs.getDocs(fs.collection(db, col));
+  trackOp('read', col, bankSnapshot.size);
+  const bank = new Map();
+  bankSnapshot.forEach((docSnap) => bank.set(docSnap.id, docSnap.data()));
+  const keyEntries = Object.entries(key);
+  if (!bank.size || bank.size > 1000 || keyEntries.length !== bank.size) throw new Error('Answer key must cover every question exactly once.');
+  for (const [id, answers] of keyEntries) {
+    const question = bank.get(id);
+    if (!/^[A-Za-z0-9][A-Za-z0-9_-]{0,99}$/.test(id) || !question || !Array.isArray(question.options) || !Array.isArray(answers) || !answers.length
+      || answers.some((answer) => !Number.isSafeInteger(answer) || answer < 0 || answer >= question.options.length)
+      || new Set(answers).size !== answers.length || ((question.scheme || 'standard') !== 'multi' && answers.length !== 1)) {
+      throw new Error(`Answer key entry ${id} does not match the current question bank.`);
+    }
+  }
 }
 
 export async function saveAnswerKey(key) {
   if (!ready) throw new Error('Firebase is not configured.');
+  const control = await fs.getDoc(d('exam_control', 'status'));
+  if (control.exists() && control.get('status') === 'active') throw new Error('The answer key cannot be changed while a paper is active.');
+  const submissions = await fs.getDocs(fs.collection(db, 'submissions'));
+  if (!submissions.empty) throw new Error('The answer key is locked after submissions exist.');
+  const assignedPapers = await fs.getDocs(fs.collection(db, 'candidate_papers'));
+  if (!assignedPapers.empty) throw new Error('The answer key cannot change while candidates have assigned papers.');
+  await assertAnswerKeyMatchesBank(key);
   trackOp('write', 'answer_key');
   await fs.setDoc(d('answer_key', 'current'), { key, updatedAt: ts() });
 }
@@ -505,7 +521,10 @@ export async function loadAnswerKey() {
   try {
     trackOp('read', 'answer_key');
     const snap = await fs.getDoc(d('answer_key', 'current'));
-    return snap.exists() ? snap.get('key') : null;
+    if (!snap.exists()) return null;
+    const key = snap.get('key');
+    await assertAnswerKeyMatchesBank(key);
+    return key;
   } catch (_) {
     return null;
   }
@@ -513,25 +532,59 @@ export async function loadAnswerKey() {
 
 export async function releaseIdentity(key) {
   if (!ready) throw new Error('Firebase is not configured.');
+  const identityRef = d('identities', key);
+  const identitySnap = await fs.getDoc(identityRef);
+  if (!identitySnap.exists()) return;
+  const identity = identitySnap.data();
+  if (identity.uid) {
+    const submission = await fs.getDoc(d('submissions', identity.uid));
+    if (submission.exists()) throw new Error('A sealed candidate identity cannot be released.');
+  }
+  const batch = fs.writeBatch(db);
+  batch.delete(identityRef);
+  if (identity.uid) {
+    batch.delete(d('candidate_claims', identity.uid));
+    batch.delete(d('candidate_papers', identity.uid));
+    batch.delete(d('sessions', identity.uid));
+  }
   trackOp('write', 'identities');
-  await fs.deleteDoc(d('identities', key));
+  await batch.commit();
 }
 
-/** Admin-only: batch write candidate roster entries to roster/{identityKey} */
+/** Admin-only: replace the roster keyed by one-time access-code hashes. */
 export async function uploadRoster(entries) {
   if (!ready) throw new Error('Firebase is not configured.');
+  if (!Array.isArray(entries) || !entries.length || entries.some((entry) => !entry || typeof entry !== 'object'
+    || !/^[a-f0-9]{40}$/.test(entry.rosterKey || '') || !/^[a-f0-9]{40}$/.test(entry.identityKey || ''))
+    || new Set(entries.map((entry) => entry.rosterKey)).size !== entries.length
+    || new Set(entries.map((entry) => entry.identityKey)).size !== entries.length) {
+    throw new Error('A non-empty roster with unique valid access-code keys is required.');
+  }
+  const control = await fs.getDoc(d('exam_control', 'status'));
+  if (control.exists() && control.get('status') === 'active') throw new Error('The candidate roster cannot be changed while a paper is active.');
+  const existingRoster = await fs.getDocs(fs.collection(db, 'roster'));
+  trackOp('read', 'roster', existingRoster.size);
+  const retainedKeys = new Set(entries.map((entry) => entry.rosterKey));
+  const staleRefs = [];
+  existingRoster.forEach((docSnap) => { if (!retainedKeys.has(docSnap.id)) staleRefs.push(docSnap.ref); });
+  for (let i = 0; i < staleRefs.length; i += 400) {
+    const batch = fs.writeBatch(db);
+    staleRefs.slice(i, i + 400).forEach((ref) => batch.delete(ref));
+    trackOp('write', 'roster', Math.min(400, staleRefs.length - i));
+    await batch.commit();
+  }
   let n = 0;
   for (let i = 0; i < entries.length; i += 400) {
     const batch = fs.writeBatch(db);
     const slice = entries.slice(i, i + 400);
     slice.forEach((entry) => {
-      batch.set(d('roster', entry.identityKey), {
+      batch.set(d('roster', entry.rosterKey), {
         identityKey: entry.identityKey,
+        rosterKey: entry.rosterKey,
         schoolUid: entry.schoolUid,
-        teamId: entry.cleanTeamId || entry.teamId,
+        teamId: entry.cleanTeamId || String(entry.teamId || '').replace(/-M\d{1,2}$/i, ''),
         rawTeamId: entry.teamId || '',
         name: entry.name,
-        normName: entry.normName || '',
         memberId: entry.memberId || '',
         division: entry.division || '',
         createdAt: ts(),

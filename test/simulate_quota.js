@@ -1,120 +1,144 @@
-/**
- * Quizzitch Firestore Quota Simulation
- * Simulates 30 candidates across a 60-minute session + 1 invigilator dashboard with 3 reloads.
- * Validates that writes <= 6,000 and reads <= 15,000.
- */
-
+import assert from 'node:assert/strict';
 import { trackOp, getFirestoreStats, resetFirestoreStats } from '../scripts/firebase.js';
 
-function simulateEvent() {
-  resetFirestoreStats();
+const candidates = 30;
+const durationMinutes = 60;
+const questions = 40;
+const eventsPerCandidate = 4;
+const adminReloads = 3;
+const reads = (collection, count = 1) => trackOp('read', collection, count);
+const writes = (collection, count = 1) => trackOp('write', collection, count);
 
-  const CANDIDATES = 30;
-  const DURATION_MINUTES = 60;
-  const QUESTIONS_COUNT = 40;
+resetFirestoreStats();
 
-  // 1. Admin setup: upload questions, answer key, roster
-  trackOp('write', 'quizzitch_questions', QUESTIONS_COUNT);
-  trackOp('write', 'answer_key', 1);
-  trackOp('write', 'roster', CANDIDATES);
-  trackOp('write', 'exam_control', 1); // release paper
+writes('quizzitch_questions', questions);
+writes('answer_key');
+writes('roster', candidates);
+writes('exam_control', 3);
+reads('exam_control', 3);
+reads('submissions', 1);
+reads('quizzitch_questions', questions);
 
-  // 2. Simulate 30 candidates
-  for (let c = 0; c < CANDIDATES; c++) {
-    const uid = `candidate_${c}`;
-    const identityKey = `key_${c}`;
+for (let candidate = 0; candidate < candidates; candidate++) {
+  reads('roster');
+  reads('submissions');
+  reads('candidate_claims');
+  reads('identities');
+  writes('identities');
+  writes('candidate_claims');
+  reads('sessions');
 
-    // Boot & Sign in
-    trackOp('read', 'roster', 1);
-    trackOp('read', 'identities', 1);
-    trackOp('write', 'identities', 1); // claim
-    trackOp('write', 'time_sync', 3);
-    trackOp('read', 'time_sync', 3);
-    trackOp('read', 'sessions', 1); // check own session
-    trackOp('write', 'sessions', 1); // initial session write
-    trackOp('write', 'events', 1); // SIGNED_IN event
+  reads('identities', 3);
+  reads('sessions', 3);
+  reads('exam_control', 3);
+  writes('sessions');
 
-    // Exam control listener & fetch paper
-    trackOp('read', 'exam_control', 1);
-    trackOp('read', 'quizzitch_questions', QUESTIONS_COUNT);
-    trackOp('write', 'forensics', 1); // baseline
-    trackOp('write', 'events', 1); // EXAM_STARTED event
-    trackOp('write', 'sessions', 1); // state: in paper
+  reads('identities');
+  reads('sessions');
+  reads('exam_control');
+  reads('forensics');
+  reads('privacy_controls', 2);
+  writes('privacy_controls');
+  writes('forensics');
 
-    // 60-minute exam simulation
-    for (let m = 1; m <= DURATION_MINUTES; m++) {
-      // 60-second heartbeat write
-      trackOp('write', 'sessions', 1);
+  reads('candidate_claims');
+  reads('identities');
+  reads('sessions');
+  reads('exam_control');
+  reads('candidate_papers');
+  reads('quizzitch_questions', questions);
+  writes('candidate_papers');
+  writes('sessions');
 
-      // Candidate answers question every 3 minutes (changed state)
-      if (m % 3 === 0) {
-        trackOp('write', 'sessions', 1);
-      }
-
-      // Candidate triggers ~3-4 advisories total over 60 mins (buffered and flushed at heartbeat)
-      if (m === 15 || m === 35) {
-        trackOp('write', 'events', 1); // flushed at heartbeat
-      }
-
-      // Candidate triggers 1 occasional strike during exam (~30% of candidates)
-      if (c % 3 === 0 && m === 25) {
-        trackOp('write', 'events', 1); // immediate strike event
-        trackOp('write', 'sessions', 1); // immediate session write
-      }
+  for (let minute = 0; minute < durationMinutes; minute++) {
+    reads('identities');
+    reads('sessions');
+    reads('exam_control');
+    writes('sessions');
+    if (minute > 0 && minute % 3 === 0) {
+      reads('identities');
+      reads('sessions');
+      reads('exam_control');
+      writes('sessions');
     }
-
-    // Exam Seal / Submission
-    trackOp('write', 'forensics', 1);
-    trackOp('write', 'submissions', 1);
-    trackOp('write', 'sessions', 1);
-    trackOp('write', 'identities', 1); // sealed
   }
 
-  // 3. Admin dashboard (1 live session + 3 page reloads)
-  const ADMIN_RELOADS = 3;
-  for (let r = 0; r < ADMIN_RELOADS; r++) {
-    trackOp('read', 'admins', 1);
-    trackOp('read', 'exam_control', 1);
-    trackOp('read', 'answer_key', 1);
-    trackOp('read', 'sessions', CANDIDATES);
-    trackOp('read', 'events', 60); // query limit 200, ~60 events present
-    trackOp('read', 'submissions', r === 0 ? 0 : r === 1 ? 5 : CANDIDATES);
+  for (let event = 0; event < eventsPerCandidate; event++) {
+    reads('identities');
+    reads('sessions');
+    reads('exam_control');
+    reads('privacy_controls');
+    reads('events');
+    writes('events');
+    writes('sessions');
+    writes('privacy_controls');
   }
 
-  // Admin live snapshot listener updates across the 60 minutes
-  // Each candidate session write delivers 1 doc change to admin
-  // Total candidate session writes = 30 * (~60 heartbeats + ~20 question updates + 2 lifecycle + 0.3 strikes) = ~2,470
-  trackOp('read', 'sessions', 2470);
-  // Each event write delivers 1 doc change to admin (~3-4 events per candidate = ~100 events)
-  trackOp('read', 'events', 105);
-  // Each submission delivers 1 doc change to admin (30 total)
-  trackOp('read', 'submissions', CANDIDATES);
-  // Control extensions/announcements (~3 updates)
-  trackOp('read', 'exam_control', 3);
-
-  const stats = getFirestoreStats();
-
-  console.log('====================================================');
-  console.log('       QUIZZITCH FIRESTORE QUOTA SIMULATION         ');
-  console.log('====================================================');
-  console.log(`Candidates: ${CANDIDATES} | Duration: ${DURATION_MINUTES} mins | Admin Reloads: ${ADMIN_RELOADS}`);
-  console.log('----------------------------------------------------');
-  console.log('TOTAL WRITES: ', stats.totalWrites, ' (Target <= 6,000 | Spark Quota: 20,000)');
-  console.log('TOTAL READS:  ', stats.totalReads,  ' (Target <= 15,000 | Spark Quota: 50,000)');
-  console.log('----------------------------------------------------');
-  console.log('Writes by collection:');
-  console.table(stats.writes);
-  console.log('Reads by collection:');
-  console.table(stats.reads);
-  console.log('====================================================');
-
-  if (stats.totalWrites > 6000) {
-    throw new Error(`Write target exceeded! ${stats.totalWrites} > 6000`);
-  }
-  if (stats.totalReads > 15000) {
-    throw new Error(`Read target exceeded! ${stats.totalReads} > 15000`);
-  }
-  console.log('✓ QUOTA BUDGET TEST PASSED: All operations well within limits.');
+  reads('submissions');
+  reads('identities');
+  reads('sessions');
+  reads('candidate_papers');
+  reads('exam_control');
+  reads('privacy_controls');
+  reads('forensics');
+  writes('submissions');
+  writes('sessions');
+  writes('identities');
+  writes('candidate_papers');
+  writes('forensics');
+  writes('privacy_controls');
 }
 
-simulateEvent();
+reads('privacy_controls', candidates);
+reads('privacy_controls', candidates);
+reads('privacy_controls', adminReloads + 1);
+writes('privacy_controls');
+
+const eventDocuments = candidates * eventsPerCandidate;
+for (let reload = 0; reload < adminReloads; reload++) {
+  reads('admins');
+  reads('exam_control');
+  reads('answer_key');
+  reads('quizzitch_questions', questions);
+  reads('sessions', candidates);
+  reads('events', eventDocuments);
+  reads('submissions', candidates);
+}
+
+reads('sessions', candidates * (1 + durationMinutes + Math.floor((durationMinutes - 1) / 3) + eventsPerCandidate + 1));
+reads('events', eventDocuments);
+reads('submissions', candidates);
+reads('exam_control', 3);
+
+reads('forensics', candidates);
+reads('events', eventDocuments);
+reads('exam_control');
+writes('forensics', candidates);
+writes('events', eventDocuments);
+writes('privacy_controls', 2);
+
+reads('exam_control');
+reads('privacy_controls', 2);
+reads('sessions', candidates);
+reads('submissions', candidates);
+reads('forensics', candidates);
+reads('events', eventDocuments);
+writes('forensics', candidates);
+writes('events', eventDocuments);
+writes('exam_control');
+writes('privacy_controls', 2);
+
+const stats = getFirestoreStats();
+const readBudget = 15000;
+const writeBudget = 6000;
+
+console.log('Firestore REST/API operation estimate');
+console.log(`Candidates: ${candidates} | Duration: ${durationMinutes} minutes | Admin reloads: ${adminReloads}`);
+console.log(`Operations include API validation reads, heartbeats, paper fetch, seal, admin listeners, manual purge, and scheduled purge.`);
+console.log(`Estimated reads: ${stats.totalReads} / ${readBudget}`);
+console.log(`Estimated writes: ${stats.totalWrites} / ${writeBudget}`);
+console.table({ reads: stats.reads, writes: stats.writes });
+console.log('Estimate only; production usage depends on real event traffic and Firestore billing semantics.');
+
+assert.ok(stats.totalReads <= readBudget, `Read target exceeded: ${stats.totalReads} > ${readBudget}`);
+assert.ok(stats.totalWrites <= writeBudget, `Write target exceeded: ${stats.totalWrites} > ${writeBudget}`);

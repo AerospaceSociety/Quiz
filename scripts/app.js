@@ -23,13 +23,15 @@ import * as fb from './firebase.js';
 import { installSandbox, armSandbox, disarmSandbox, enterFullscreen, exitFullscreen, isFullscreen, unloadPromptWithin } from './sandbox.js';
 import { monoNow, syncClock, httpDateSampler, createExamClock } from './timer.js';
 import {
-  startTelemetry, stopTelemetry, wireEventStream, identityKeyFor, buildPackage, dispatch, flushOutbox, hasOutbox, printReceipt
+  startTelemetry, stopTelemetry, wireEventStream, buildPackage, dispatch, flushOutbox, hasOutbox, printReceipt
 } from './submission.js';
-import { $, setText, show, deepFreeze, randomHex, normName, withTimeout } from './util.js';
+import { $, setText, show, deepFreeze, randomHex, withTimeout } from './util.js';
 
 let settings = null;
 let control = { status: 'waiting' };
 let controlUnsub = null;
+let privacyUnsub = null;
+let privacyPurgeMarker = null;
 let clock = null;
 let lastEnd = null;
 let resumeSnap = null;
@@ -39,10 +41,29 @@ let sealing = false;
 let resyncHandle = null;
 
 /* --- 01 · CONFIGURATION --------------------------------------------------- */
+function deepMerge(target, source) {
+  const out = { ...target };
+  for (const [k, v] of Object.entries(source || {})) {
+    if (v && typeof v === 'object' && !Array.isArray(v)) {
+      out[k] = deepMerge(out[k] || {}, v);
+    } else {
+      out[k] = v;
+    }
+  }
+  return out;
+}
+
 async function loadSettings() {
   const res = await fetch('config/settings.json', { cache: 'no-store' });
   if (!res.ok) throw new Error(`config/settings.json → HTTP ${res.status}`);
-  const s = await res.json();
+  let s = await res.json();
+  try {
+    const localRes = await fetch('config/settings.local.json', { cache: 'no-store' });
+    if (localRes.ok) {
+      const local = await localRes.json();
+      if (local && typeof local === 'object') s = deepMerge(s, local);
+    }
+  } catch (_) {}
   const missing = ['meta', 'exam', 'timer', 'security', 'proctoring', 'telemetry', 'schemes', 'modules', 'divisions', 'registry', 'firebase', 'jotform']
     .filter((k) => !(k in s));
   if (missing.length) throw new Error(`settings.json is missing: ${missing.join(', ')}`);
@@ -50,6 +71,42 @@ async function loadSettings() {
 }
 
 const newSessionId = () => `QZ-${Date.now().toString(36).toUpperCase()}-${randomHex(3).toUpperCase()}`;
+
+function purgeLocalStills() {
+  if (S.stillsPurged) return;
+  S.stillsPurged = true;
+  S.baseline = null;
+  S.thumbs = [];
+  if (S.sealed?.forensics) {
+    if (S.sealed.forensics.baseline) delete S.sealed.forensics.baseline.photo;
+    S.sealed.forensics.thumbs = [];
+  }
+  proctor.clearStillData();
+  const image = $('baseline-img');
+  if (image) {
+    image.removeAttribute('src');
+    image.hidden = true;
+  }
+  const empty = $('baseline-empty');
+  if (empty) {
+    empty.textContent = 'Reference photo purged for privacy';
+    empty.hidden = false;
+  }
+}
+
+function applyStillsPurgeMarker() {
+  if (!control.startedAtMs) return;
+  if (Number(privacyPurgeMarker?.purgedStartedAt) === Number(control.startedAtMs)) purgeLocalStills();
+  else S.stillsPurged = false;
+}
+
+function subscribePrivacyPurge() {
+  if (privacyUnsub || !fb.isReady()) return;
+  privacyUnsub = fb.watchStillsPurge((marker) => {
+    privacyPurgeMarker = marker;
+    applyStillsPurgeMarker();
+  });
+}
 
 /* --- 02 · STAGE 1 · SIGN-IN ------------------------------------------------ */
 function validateField(id, hint, pattern, example) {
@@ -103,88 +160,6 @@ function validateName() {
   return value;
 }
 
-async function rosterCheck(schoolUid, teamId, name) {
-  const mode = settings.registry.rosterCheck;
-  const isIndividual = schoolUid.includes('-IND-');
-  const defaultSchoolName = isIndividual ? 'Independent Candidate' : '';
-  const out = { ok: true, verified: false, schoolName: defaultSchoolName, name, memberId: null };
-  if (mode === 'off' || !fb.isReady()) return out;
-  const roster = await fb.fetchRoster(schoolUid);
-  const strict = mode === 'strict' || mode === 'enforced';
-  if (!roster) {
-    const cleanTeamId = teamId.replace(/-M\d{1,2}$/i, '');
-    const candidateKey = await identityKeyFor(schoolUid, cleanTeamId, normName(name));
-    const entry = await fb.fetchRosterEntry(candidateKey);
-    if (entry) {
-      out.verified = true;
-      out.name = entry.name || name;
-      out.memberId = entry.memberId || null;
-      return out;
-    }
-    return strict ? { ok: false, message: `This ${isIndividual ? 'Registration' : 'School'} UID is not registered for CelesteCon 2026.` } : out;
-  }
-  out.schoolName = roster.schoolName || roster.school?.name || defaultSchoolName;
-
-  // Search team by exact match, suffix, or inside events array
-  let team = null;
-  if (roster.teams) {
-    team = roster.teams[teamId];
-    if (!team) {
-      const entry = Object.entries(roster.teams).find(([k]) => {
-        const kNorm = k.toUpperCase();
-        const tNorm = teamId.toUpperCase();
-        return kNorm === tNorm || tNorm.endsWith(kNorm) || kNorm.endsWith(tNorm);
-      });
-      if (entry) team = entry[1];
-    }
-  }
-  if (!team && Array.isArray(roster.events)) {
-    for (const ev of roster.events) {
-      if (Array.isArray(ev.teams)) {
-        const matchTeam = ev.teams.find((t) => {
-          const tId = (t.teamId || '').toUpperCase();
-          const tNorm = teamId.toUpperCase();
-          return tId === tNorm || tNorm.endsWith(tId) || tId.endsWith(tNorm);
-        });
-        if (matchTeam) {
-          team = matchTeam;
-          break;
-        }
-      }
-    }
-  }
-
-  if (!team) {
-    const cleanTeamId = teamId.replace(/-M\d{1,2}$/i, '');
-    const candidateKey = await identityKeyFor(schoolUid, cleanTeamId, normName(name));
-    const entry = await fb.fetchRosterEntry(candidateKey);
-    if (entry) {
-      out.verified = true;
-      out.name = entry.name || name;
-      out.memberId = entry.memberId || null;
-      return out;
-    }
-    return strict ? { ok: false, message: `Team ${teamId} is not registered under ${schoolUid}.` } : out;
-  }
-
-  const members = team.members || [];
-  const match = members.find((m) => {
-    const mName = typeof m === 'string' ? m : m.name;
-    return normName(mName) === normName(name);
-  });
-
-  if (!match) {
-    return strict ? { ok: false, message: 'Your name is not on the registered roster for this team. Check spelling or contact your teacher-in-charge.' } : out;
-  }
-
-  out.verified = true;
-  out.name = typeof match === 'string' ? match : match.name;
-  if (typeof match === 'object' && match.memberId) {
-    out.memberId = match.memberId;
-  }
-  return out;
-}
-
 async function onSignin(e) {
   e.preventDefault();
   view.signinError('');
@@ -192,7 +167,13 @@ async function onSignin(e) {
   const rawSchoolUid = validateField('in-school-uid', 'hint-school-uid', r.schoolUidPattern, r.schoolUidExample);
   const rawTeamId = validateField('in-team-id', 'hint-team-id', r.teamIdPattern, r.teamIdExample);
   const name = validateName();
+  const claimCode = $('in-claim-code').value.trim().toLowerCase();
   if (!rawSchoolUid || !rawTeamId || !name) return;
+  if (settings.firebase.enabled && !/^[0-9a-f]{32}$/.test(claimCode)) {
+    view.fieldState('in-claim-code', 'hint-claim-code', false, 'Enter the 32-character roster access code provided by your school.');
+    return;
+  }
+  view.fieldState('in-claim-code', 'hint-claim-code', true, 'Access code accepted');
 
   const consentBox = $('in-consent');
   if (!consentBox || !consentBox.checked) {
@@ -201,8 +182,6 @@ async function onSignin(e) {
   }
 
   const consentVersion = (settings.security && settings.security.consentVersion) || '2026.1-DPDP-DRAFT';
-  const consentAt = Date.now();
-
   const schoolUid = rawSchoolUid;
   const isIndividual = schoolUid.includes('-IND-');
 
@@ -220,22 +199,12 @@ async function onSignin(e) {
 
   view.setBusy('btn-signin', true, 'Authenticating…');
   try {
-    const roster = await withTimeout(rosterCheck(schoolUid, cleanTeamId, name), 10000, 'Roster lookup');
-    if (!roster.ok) { view.signinError(roster.message); return; }
-
-    if (!memberId) {
-      memberId = roster.memberId || (isIndividual ? `${cleanTeamId}-M1` : null);
-    }
-
-    const identityKey = await identityKeyFor(schoolUid, cleanTeamId, normName(roster.name));
-    const claim = await withTimeout(fb.claimIdentity(identityKey, {
+    const claim = await withTimeout(fb.claimIdentity(claimCode, {
       schoolUid,
-      teamId: cleanTeamId,
-      memberId: memberId || '',
-      name: roster.name,
-      isIndividual,
+      teamId: rawTeamId,
+      name,
       consentVersion,
-      consentAt
+      consentAccepted: consentBox.checked
     }), 10000, 'Identity check');
 
     if (!claim.ok) {
@@ -248,6 +217,19 @@ async function onSignin(e) {
         : 'This candidate is already signed in on another device. Ask the invigilator to release the lock.');
       return;
     }
+    $('in-claim-code').value = '';
+    subscribePrivacyPurge();
+
+    const identityKey = claim.identityKey;
+    const roster = {
+      name: claim.profile.name,
+      memberId: claim.profile.memberId || memberId,
+      schoolName: isIndividual ? 'Independent Candidate' : '',
+      consentVersion: claim.profile.consentVersion,
+      consentAt: claim.profile.consentAt,
+      verified: true
+    };
+    memberId = roster.memberId || memberId || (isIndividual ? `${cleanTeamId}-M1` : null);
 
     const own = await fb.getOwnSession();
     if (own && own.status === 'submitted' && own.identityKey === identityKey) {
@@ -269,20 +251,20 @@ async function onSignin(e) {
         name: roster.name,
         division: division.code,
         schoolName: roster.schoolName,
-        rosterVerified: roster.verified,
+        rosterVerified: true,
         isIndividual,
-        consentVersion,
-        consentAt
+        consentVersion: roster.consentVersion,
+        consentAt: roster.consentAt
       };
     }
     if (own && own.identityKey === identityKey) S.strikes = Math.max(S.strikes, Number(own.strikes) || 0);
 
+    if (!(await startTelemetry())) throw new Error('Secure session setup failed. Check your connection and ask an invigilator for help.');
     recordIncident({
       type: 'SIGNED_IN',
       level: Level.INFO,
       message: `Authenticated ${S.candidate.name} · ${cleanTeamId}${memberId ? ` (${memberId})` : ''} · ${schoolUid}${roster.verified ? ' (roster verified)' : ' (roster unverified)'}`
     });
-    startTelemetry();
     goCalibrate();
   } catch (err) {
     console.error('[signin]', err);
@@ -321,7 +303,8 @@ function showResumeCard(snap) {
     if ($('in-consent')) $('in-consent').checked = true;
     show('resume-card', false);
     show('form-signin', true);
-    $('form-signin').requestSubmit();
+    view.signinError('Enter your private roster access code to resume this session.');
+    $('in-claim-code').focus();
   };
   $('btn-not-me').onclick = () => {
     show('resume-card', false);
@@ -433,6 +416,7 @@ function subscribeControl() {
   controlUnsub = fb.watchControl((c) => {
     const prev = control.status;
     control = c;
+    applyStillsPurgeMarker();
     bus.emit(EV.CONTROL, c);
     if (S.stage === Stage.PROTOCOL) {
       view.paintRelease(c.status, $('ack').checked);
@@ -457,14 +441,9 @@ function computeEnd() {
 }
 
 async function loadBank() {
-  let raw = null;
-  if (settings.exam.questionSource === 'firestore' && fb.isReady()) {
-    raw = await withTimeout(fb.fetchQuestions(), 15000, 'Question download');
-  } else {
-    const res = await fetch('config/questions.json', { cache: 'no-store' });
-    if (!res.ok) throw new Error(`Question bank HTTP ${res.status}`);
-    raw = await res.json();
-  }
+  const res = await fetch('config/questions.json', { cache: 'no-store' });
+  if (!res.ok) throw new Error(`Question bank HTTP ${res.status}`);
+  const raw = await res.json();
   const { questions, problems } = engine.validateBank(raw);
   if (problems.length) {
     console.warn('[bank] skipped items:', problems);
@@ -494,14 +473,19 @@ async function onEnterExam() {
     S.clockSource = sync.source;
     setClockSource(() => monoNow() + offset);
 
-    const bank = await loadBank();
-    engine.buildPaper(bank, `${S.identityKey}|${settings.meta.paperId}`, S.candidate.division);
+    if (settings.exam.questionSource === 'firestore') {
+      if (!fb.isReady()) throw new Error('The secure server paper service is unavailable.');
+      const paper = await withTimeout(fb.fetchPaper(), 15000, 'Paper download');
+      engine.installPaper(paper);
+    } else {
+      const bank = await loadBank();
+      engine.buildPaper(bank, `${S.identityKey}|${settings.meta.paperId}`, S.candidate.division);
+    }
     if (!S.paper.length) throw new Error('No questions are available for your division.');
 
     const resumed = !!(resumeSnap && resumeSnap.identityKey === S.identityKey && resumeSnap.stage === Stage.EXAM);
     if (resumed) engine.restoreAnswers(resumeSnap.answers, resumeSnap.idx);
     if (!S.examStartedAt) markExamStart(now());
-
     const end = computeEnd();
     if (end && end - now() <= 0) throw new Error('The examination window has already closed.');
 
@@ -636,7 +620,18 @@ async function seal(reason) {
   if (controlUnsub) controlUnsub();
 
   const release = () => fb.signOutUser().catch(() => {});   // frees this terminal for the next candidate
-  const status = await dispatch(pkg, () => { view.paintDispatch({ ...status, firebase: 'recorded' }); release(); });
+  let status;
+  try {
+    status = await dispatch(pkg, () => { view.paintDispatch({ ...status, firebase: 'recorded' }); release(); });
+  } finally {
+    S.baseline = null;
+    S.thumbs = [];
+    proctor.clearStillData();
+    if (privacyUnsub) privacyUnsub();
+    privacyUnsub = null;
+    const baselineImage = $('baseline-img');
+    if (baselineImage) baselineImage.removeAttribute('src');
+  }
   view.paintDispatch(status);
   if (status.firebase === 'recorded') release();
 }
@@ -723,7 +718,7 @@ async function boot() {
     onExamKey: (e) => $('modal-review').hidden && $('modal-fslock').hidden
       && !document.body.classList.contains('is-shielded') && engine.handleExamKey(e)
   });
-  wireEventStream(() => proctor.thumbnail());
+  wireEventStream(() => S.stillsPurged ? null : proctor.thumbnail());
 
   const online = await withTimeout(fb.initFirebase(settings.firebase), 12000, 'Firebase init').catch(() => false);
   if (online) {

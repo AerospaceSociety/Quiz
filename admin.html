@@ -77,9 +77,9 @@
 
     <section class="kpis" aria-label="Live totals">
       <div class="kpi"><span>Connected</span><b id="kpi-connected">0</b></div>
-      <div class="kpi kpi--secure"><span><i class="dot"></i>Secure</span><b id="kpi-secure">0</b></div>
-      <div class="kpi kpi--warning"><span><i class="dot"></i>Warning</span><b id="kpi-warning">0</b></div>
-      <div class="kpi kpi--flagged"><span><i class="dot"></i>Flagged</span><b id="kpi-flagged">0</b></div>
+      <div class="kpi kpi--secure"><span><i class="dot"></i>No flags reported</span><b id="kpi-secure">0</b></div>
+      <div class="kpi kpi--warning"><span><i class="dot"></i>Advisory reported</span><b id="kpi-warning">0</b></div>
+      <div class="kpi kpi--flagged"><span><i class="dot"></i>Flags reported</span><b id="kpi-flagged">0</b></div>
       <div class="kpi kpi--submitted"><span><i class="dot"></i>Submitted</span><b id="kpi-submitted">0</b></div>
       <div class="kpi kpi--offline"><span><i class="dot"></i>Offline</span><b id="kpi-offline">0</b></div>
     </section>
@@ -97,17 +97,17 @@
         <select id="f-school" aria-label="School UID"><option value="">All schools</option></select>
         <select id="f-team" aria-label="Team ID"><option value="">All teams</option></select>
         <select id="f-division" aria-label="Division"><option value="">All divisions</option></select>
-        <select id="f-flags" aria-label="Minimum strikes">
-          <option value="0">Any strikes</option>
-          <option value="1">≥ 1 strike</option>
-          <option value="2">≥ 2 strikes</option>
-          <option value="3">≥ 3 strikes</option>
+        <select id="f-flags" aria-label="Minimum reported strikes">
+          <option value="0">Any reported strikes</option>
+          <option value="1">≥ 1 reported strike</option>
+          <option value="2">≥ 2 reported strikes</option>
+          <option value="3">≥ 3 reported strikes</option>
         </select>
         <div class="seg" id="f-status" role="group" aria-label="Status">
           <button type="button" class="is-active" data-v="">All</button>
-          <button type="button" data-v="secure">Secure</button>
-          <button type="button" data-v="warning">Warning</button>
-          <button type="button" data-v="flagged">Flagged</button>
+          <button type="button" data-v="secure">No flags reported</button>
+          <button type="button" data-v="warning">Advisory reported</button>
+          <button type="button" data-v="flagged">Flags reported</button>
           <button type="button" data-v="submitted">Submitted</button>
           <button type="button" data-v="offline">Offline</button>
         </div>
@@ -147,7 +147,7 @@
           <p class="note" id="standings-note">Team score = sum of members' scores. Top seeds highlighted.</p>
           <div class="tablewrap">
             <table class="table table--dense">
-              <thead><tr><th class="num">#</th><th>Team</th><th>School UID</th><th class="num">Members</th><th class="num">Pooled</th><th class="num">Strikes</th><th>Seed</th></tr></thead>
+              <thead><tr><th class="num">#</th><th>Team</th><th>School UID</th><th class="num">Members</th><th class="num">Pooled</th><th class="num">Reported strikes</th><th>Seed</th></tr></thead>
               <tbody id="standings-body"></tbody>
             </table>
           </div>
@@ -172,7 +172,7 @@
         </section>
         <section class="card">
           <h2 class="card__title">Upload candidate roster</h2>
-          <p class="note">Upload candidate roster (CSV or JSON). Required fields: <code>schoolUid, teamId, name</code> (optional: <code>memberId, division</code>). Generates authoritative <code>identityKey</code> and writes to <code>roster/{identityKey}</code>.</p>
+          <p class="note">Upload CSV or JSON with <code>schoolUid, teamId, name</code> (optional: <code>memberId, division, claimCode</code>). A random private access code is generated per candidate and downloaded after upload. Distribute codes securely; keep the downloaded backup protected. Include <code>claimCode</code> when re-uploading to preserve codes.</p>
           <input type="file" id="file-roster" accept=".csv,.json,application/json,text/csv">
           <p class="tool-status" id="roster-status"></p>
         </section>
@@ -184,7 +184,7 @@
         </section>
         <section class="card card--danger">
           <h2 class="card__title">Retention &amp; DPDP compliance</h2>
-          <p class="note">Permanently delete reference photos and incident review thumbnails from all candidate forensic records. Candidate submission answers, scores, timestamps, event ledger, and checksums are preserved.</p>
+          <p class="note">Immediately delete stored reference photos and incident thumbnails from Firestore, clear stills held by connected candidate and admin pages, and prevent this event from storing more stills. A scheduled Cloudflare Worker also purges stored stills 30 days after the event ends. Answers, scores, event text, and checksums remain; copies exported or captured outside the site cannot be recalled.</p>
           <div class="btn-row">
             <button class="btn btn--danger btn--sm" id="btn-purge-stills" type="button">Purge forensic stills</button>
           </div>

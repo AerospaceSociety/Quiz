@@ -71,6 +71,7 @@ export const S = {
   candidate: { schoolUid: '', teamId: '', name: '', division: '', schoolName: '', rosterVerified: false },
 
   baseline: null,            // { photo, pose: {yaw, pitch}, noise, capturedAt }
+  stillsPurged: false,
   paper: [],                 // frozen question objects for this candidate
   answers: [],               // [{ sel: number[], marked, visits, timeMs }]
   idx: 0,
@@ -184,7 +185,7 @@ export function refreshStatus() {
 
 export function attachThumb(entry, dataUrl) {
   const cap = settings ? settings.proctoring.incidentThumbs : 12;
-  if (!entry || !dataUrl || S.thumbs.length >= cap) return;
+  if (S.stillsPurged || !entry || !dataUrl || S.thumbs.length >= cap) return;
   S.thumbs.push({ seq: entry.seq, type: entry.type, level: entry.level, t: entry.t, dataUrl });
 }
 
