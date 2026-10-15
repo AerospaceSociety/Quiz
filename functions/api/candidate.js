@@ -363,9 +363,17 @@ async function buildExpectedPaper(env, division) {
   const normalizedBank = bank.map((entry) => {
     const question = entry.data;
     const scheme = question && question.scheme !== undefined ? question.scheme : 'standard';
+    let catId = Number(question?.catId);
+    if (!Number.isSafeInteger(catId) || catId < 0) {
+      catId = 0;
+    }
+    const isBonus = question?.isBonus === true || question?.bonus === true || question?.segment === 'bonus' || catId === 1;
+    if (modules.length <= 2) {
+      catId = isBonus ? 1 : 0;
+    }
     if (!question || typeof question !== 'object' || Array.isArray(question)
       || typeof question.id !== 'string' || question.id !== entry.id || !/^[A-Za-z0-9][A-Za-z0-9_-]{0,99}$/.test(question.id)
-      || !Number.isSafeInteger(question.catId) || !moduleSet.has(question.catId)
+      || !Number.isSafeInteger(catId) || !moduleSet.has(catId)
       || typeof scheme !== 'string' || !schemes.has(scheme)
       || typeof question.question !== 'string' || !question.question.trim() || question.question.length > 5000 || /data:image\//i.test(question.question)
       || (question.supplement != null && (typeof question.supplement !== 'string' || question.supplement.length > 5000 || /data:image\//i.test(question.supplement)))
@@ -375,7 +383,7 @@ async function buildExpectedPaper(env, division) {
         || question.divisions.some((value) => !['IPD', 'THT'].includes(value))))) {
       throw new HttpError(503, 'Question bank contains an invalid item');
     }
-    return question;
+    return { ...question, catId, isBonus };
   });
 
   const isBonusQuestion = (q) => q.catId === 1 || q.bonus === true || q.segment === 'bonus' || q.isBonus === true;

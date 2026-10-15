@@ -563,12 +563,23 @@ async function readJSONFile(input) {
 function keyFromAny(data) {
   if (Array.isArray(data)) {
     const key = {};
-    data.forEach((q) => { if (q && q.id != null && Array.isArray(q.correct)) key[String(q.id)] = q.correct.slice(); });
+    data.forEach((q) => {
+      if (!q || q.id == null) return;
+      const rawAns = q.correct !== undefined ? q.correct : q.answer;
+      if (Array.isArray(rawAns)) {
+        key[String(q.id)] = rawAns.map(Number).filter(Number.isSafeInteger);
+      } else if (Number.isSafeInteger(Number(rawAns)) && rawAns !== null && rawAns !== '') {
+        key[String(q.id)] = [Number(rawAns)];
+      }
+    });
     return key;
   }
   if (data && typeof data === 'object') {
     const key = {};
-    Object.entries(data).forEach(([id, v]) => { if (Array.isArray(v)) key[id] = v.slice(); });
+    Object.entries(data).forEach(([id, v]) => {
+      if (Array.isArray(v)) key[id] = v.map(Number).filter(Number.isSafeInteger);
+      else if (Number.isSafeInteger(Number(v)) && v !== null && v !== '') key[id] = [Number(v)];
+    });
     return key;
   }
   return {};
@@ -576,14 +587,26 @@ function keyFromAny(data) {
 
 function validateQuestionBank(data) {
   if (!Array.isArray(data) || !data.length || data.length > 1000) throw new Error('Expected 1–1,000 questions.');
+  const isSingleModule = settings.modules.length <= 2;
   const moduleIds = new Set(settings.modules.map((module) => module.id));
+  const bonusModule = settings.modules.find((m) => m.isBonus);
   const divisionCodes = new Set(settings.divisions.map((division) => division.code));
   const schemeIds = new Set(Object.keys(settings.schemes));
   const ids = new Set();
   return data.map((question, index) => {
     if (!question || typeof question !== 'object' || Array.isArray(question)) throw new Error(`Question ${index + 1} must be an object.`);
     const id = String(question.id ?? '').trim();
-    const catId = Number(question.catId);
+    const rawCat = Number(question.catId);
+    const isBonus = question.isBonus === true || question.bonus === true || question.segment === 'bonus';
+    let catId = rawCat;
+    if (isBonus && bonusModule) {
+      catId = bonusModule.id;
+    } else if (isSingleModule) {
+      // In single category mode, all non-bonus questions map to the main module
+      catId = settings.modules[0]?.id ?? 0;
+    } else if (!Number.isSafeInteger(catId) || !moduleIds.has(catId)) {
+      throw new Error(`Question ${id} has an unknown module ID.`);
+    }
     const scheme = question.scheme || 'standard';
     if (!/^[A-Za-z0-9][A-Za-z0-9_-]{0,99}$/.test(id) || ids.has(id)) throw new Error(`Question ${index + 1} has an invalid or duplicate ID.`);
     if (!Number.isSafeInteger(catId) || !moduleIds.has(catId)) throw new Error(`Question ${id} has an unknown module ID.`);
@@ -600,9 +623,10 @@ function validateQuestionBank(data) {
       || question.divisions.some((division) => !divisionCodes.has(division)))) {
       throw new Error(`Question ${id} has invalid division restrictions.`);
     }
-    if (Object.hasOwn(question, 'correct')) {
-      const correct = question.correct;
-      if (!Array.isArray(correct) || !correct.length || correct.some((answer) => !Number.isSafeInteger(answer) || answer < 0 || answer >= question.options.length)
+    const rawAnswer = question.correct !== undefined ? question.correct : question.answer;
+    if (rawAnswer !== undefined && rawAnswer !== null) {
+      const correct = Array.isArray(rawAnswer) ? rawAnswer : [rawAnswer];
+      if (!correct.length || correct.some((answer) => !Number.isSafeInteger(Number(answer)) || Number(answer) < 0 || Number(answer) >= question.options.length)
         || new Set(correct).size !== correct.length || (scheme !== 'multi' && correct.length !== 1)) {
         throw new Error(`Question ${id} has an invalid answer key.`);
       }
@@ -615,7 +639,8 @@ function validateQuestionBank(data) {
       question: question.question,
       supplement: question.supplement || '',
       options: question.options.slice(),
-      ...(question.divisions ? { divisions: question.divisions.slice() } : {})
+      ...(question.divisions ? { divisions: question.divisions.slice() } : {}),
+      ...(isBonus ? { isBonus: true, segment: 'bonus' } : {})
     };
   });
 }

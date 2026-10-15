@@ -448,7 +448,8 @@ export async function seedQuestions(questions) {
       question: question.question,
       supplement: typeof question.supplement === 'string' ? question.supplement : '',
       options: question.options.slice(),
-      ...(Array.isArray(question.divisions) ? { divisions: question.divisions.slice() } : {})
+      ...(Array.isArray(question.divisions) ? { divisions: question.divisions.slice() } : {}),
+      ...(question.isBonus ? { isBonus: true, segment: 'bonus' } : {})
     };
   });
   const ids = safeQuestions.map((question) => question.id);
