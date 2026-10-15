@@ -4,6 +4,7 @@
   "description": "Secure Assessment Portal - CelesteCon 2026",
   "type": "module",
   "scripts": {
+    "build": "node scripts/build-static.js",
     "build:static": "node scripts/build-static.js",
     "dev": "npm run build:static && npx serve dist -l 8000",
     "start": "npm run dev",
