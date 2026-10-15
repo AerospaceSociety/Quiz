@@ -153,7 +153,14 @@ async function claim(env, uid, payload) {
   if (priorClaim && priorClaim.data.identityKey !== identityKey) throw new HttpError(409, 'This account is already bound to a different candidate');
   const existing = await getDocument(env, `identities/${identityKey}`);
   if (existing && existing.data.state === 'sealed') throw new HttpError(409, 'This candidate has already submitted');
-  if (existing && existing.data.uid !== uid) throw new HttpError(409, 'This candidate is active on another device');
+  if (existing && existing.data.uid !== uid) {
+    const priorSession = await getDocument(env, `sessions/${existing.data.uid}`);
+    const isLive = priorSession
+      && priorSession.data.status !== 'submitted'
+      && ['protocol', 'exam'].includes(priorSession.data.stage)
+      && (Date.now() - (Number(priorSession.data.heartbeatAt) || 0)) < 90000;
+    if (isLive) throw new HttpError(409, 'This candidate is active on another device');
+  }
   const consentVersion = String(env.CONSENT_VERSION || '2026.1-DPDP-DRAFT');
   if (payload.consentAccepted !== true || payload.consentVersion !== consentVersion) {
     throw new HttpError(400, 'The current proctoring consent must be accepted before sign-in');
@@ -186,6 +193,9 @@ async function claim(env, uid, payload) {
     writes.push(priorClaim
       ? { path: `candidate_claims/${uid}`, data: userClaim, updateTime: priorClaim.updateTime }
       : { path: `candidate_claims/${uid}`, data: userClaim, create: true });
+    if (existing && existing.data.uid && existing.data.uid !== uid) {
+      writes.push({ path: `candidate_claims/${existing.data.uid}`, delete: true });
+    }
     await commitWrites(env, writes);
   } catch (error) {
     if (error.status === 409) throw new HttpError(409, 'This candidate was claimed on another device at the same time');

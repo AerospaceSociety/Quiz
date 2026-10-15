@@ -548,6 +548,29 @@ export async function loadAnswerKey() {
   }
 }
 
+export async function lookupIdentityKey(query) {
+  if (!ready) throw new Error('Firebase is not configured.');
+  const raw = String(query || '').trim();
+  if (!raw) return null;
+  if (/^[0-9a-f]{40}$/i.test(raw)) return raw.toLowerCase();
+  if (/^[0-9a-f]{32}$/i.test(raw)) {
+    const rosterKey = (await sha256Hex(`quizzitch-roster-claim-v1|${raw.toLowerCase()}`)).slice(0, 40);
+    const snap = await fs.getDoc(d('roster', rosterKey));
+    if (snap.exists() && snap.data().identityKey) return snap.data().identityKey;
+  }
+  const qUpper = raw.toUpperCase();
+  const rosterSnap = await fs.getDocs(fs.collection(db, 'roster'));
+  for (const doc of rosterSnap.docs) {
+    const data = doc.data();
+    if ([data.teamId, data.rawTeamId, data.cleanTeamId, data.schoolUid, data.name].some(
+      (v) => String(v || '').toUpperCase() === qUpper
+    )) {
+      return data.identityKey;
+    }
+  }
+  return null;
+}
+
 export async function releaseIdentity(key) {
   if (!ready) throw new Error('Firebase is not configured.');
   const identityRef = d('identities', key);

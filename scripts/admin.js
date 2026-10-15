@@ -833,13 +833,20 @@ async function onRosterFile() {
   }
 }
 
-async function releaseLock(key, statusId) {
-  if (!/^[0-9a-f]{40}$/.test(key)) { setText(statusId, 'Identity keys are 40 hexadecimal characters.'); return; }
-  if (!confirm('Release this identity lock? The candidate will be able to sign in from another device (not after a sealed submission).')) return;
+async function releaseLock(query, statusId) {
+  const input = String(query || '').trim();
+  if (!input) { setText(statusId, 'Enter Team ID, School UID, Access code, or Identity key.'); return; }
+  setText(statusId, 'Resolving candidate identity…');
   try {
+    const key = await fb.lookupIdentityKey(input);
+    if (!key) { setText(statusId, `No candidate identity found matching "${input}".`); return; }
+    if (!confirm(`Release identity lock for "${input}"? The candidate will be able to sign in from another device.`)) {
+      setText(statusId, 'Cancelled.');
+      return;
+    }
     await fb.releaseIdentity(key);
     setText(statusId, 'Lock released.');
-    toast('Identity lock released', key.slice(0, 12), 'ok');
+    toast('Identity lock released', input, 'ok');
   } catch (err) {
     setText(statusId, `Failed: ${err.message}`);
   }
