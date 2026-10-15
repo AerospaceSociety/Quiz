@@ -17,7 +17,13 @@ Quizzitch now requires server-only Firebase credentials for candidate claims, te
 
 ## 2. Pages configuration
 
-Set these Pages environment variables for Production and Preview. Use exact origins, comma-separated, with no wildcard:
+### Step 1: Cloudflare Dashboard Build Settings
+In Cloudflare Dashboard $\to$ **Workers & Pages** $\to$ **quiz** $\to$ **Settings** $\to$ **Builds & deployments**:
+- **Build command**: `npm run build:static`
+- **Build output directory**: `dist`
+
+### Step 2: Cloudflare Environment Variables
+In **Settings** $\to$ **Variables and Secrets** $\to$ **Environment variables**, set these for Production and Preview (these are dynamically injected into `/config/settings.json` at build and runtime without ever committing them to Git):
 
 | Variable | Example |
 |---|---|
