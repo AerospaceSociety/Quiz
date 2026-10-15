@@ -13,7 +13,9 @@
 
    All dynamic text is written through util.h (text nodes only).
    ========================================================================== */
-
+/*
+fix 
+*/
 import * as fb from './firebase.js';
 import {
   $, h, mount, setText, show, sha256Hex, canonicalJSON, istStamp, istTime, mmss, pad,
@@ -242,11 +244,11 @@ function renderFeed() {
     onclick: () => openForensic(e.uid),
     title: 'Open forensic record'
   },
-  h('span', { class: 'fe__time' }, istTime(fb.toMs(e.ts) || e.clientTs)),
-  h('span', { class: 'fe__level' }, e.level === 2 ? `STRIKE ${e.strikes || ''}`.trim() : LEVEL_LABEL[e.level] || 'Info'),
-  h('span', { class: 'fe__who' }, `${String(e.schoolUid || '').replace('CLT-2026-SCH-', 'SCH-')} · ${e.name || '—'}`),
-  h('span', { class: 'fe__msg' }, e.message || e.type),
-  safeStillSource(e.thumb) ? h('img', { class: 'fe__thumb', src: safeStillSource(e.thumb), alt: `Still at ${e.type}` }) : null))
+    h('span', { class: 'fe__time' }, istTime(fb.toMs(e.ts) || e.clientTs)),
+    h('span', { class: 'fe__level' }, e.level === 2 ? `STRIKE ${e.strikes || ''}`.trim() : LEVEL_LABEL[e.level] || 'Info'),
+    h('span', { class: 'fe__who' }, `${String(e.schoolUid || '').replace('CLT-2026-SCH-', 'SCH-')} · ${e.name || '—'}`),
+    h('span', { class: 'fe__msg' }, e.message || e.type),
+    safeStillSource(e.thumb) ? h('img', { class: 'fe__thumb', src: safeStillSource(e.thumb), alt: `Still at ${e.type}` }) : null))
     : h('li', { class: 'empty' }, 'Waiting for events…'));
 }
 
@@ -497,9 +499,9 @@ function exportCandidatesCSV() {
   const data = rows().map((r) => {
     const sc = scoreSubmission(r.sub);
     return [r.name, r.schoolUid, r.teamId, r.division, r.status, r.stage, r.answered, r.total, sc ? sc.total : '',
-      ...mods.map((m) => (sc ? sc.modules[m.id] || 0 : '')), r.strikes, r.advisories,
-      r.sub ? r.sub.verdict : '', r.sub ? r.sub.reason : '', r.sub ? istStamp(r.sub.sealedAt) : '',
-      r.sub ? r.sub.sessionId : (r.s && r.s.sessionId) || '', r.sub ? r.sub.checksum : '', r.sub ? verification(r.sub) : '', r.uid];
+    ...mods.map((m) => (sc ? sc.modules[m.id] || 0 : '')), r.strikes, r.advisories,
+    r.sub ? r.sub.verdict : '', r.sub ? r.sub.reason : '', r.sub ? istStamp(r.sub.sealedAt) : '',
+    r.sub ? r.sub.sessionId : (r.s && r.s.sessionId) || '', r.sub ? r.sub.checksum : '', r.sub ? verification(r.sub) : '', r.uid];
   });
   downloadBlob(new Blob([`﻿${toCSV(header, data)}`], { type: 'text/csv;charset=utf-8' }), `quizzitch-candidates-${stamp()}.csv`);
 }
@@ -965,7 +967,7 @@ async function boot() {
         const local = await localRes.json();
         if (local && typeof local === 'object') loaded = deepMerge(loaded, local);
       }
-    } catch (_) {}
+    } catch (_) { }
     settings = deepFreeze(loaded);
   } catch (err) {
     bootError('Configuration unavailable', err.message);
