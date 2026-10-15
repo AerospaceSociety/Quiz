@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "build:static": "node scripts/build-static.js",
-    "dev": "npm run build:static && npx serve dist -l tcp://127.0.0.1:8000",
+    "dev": "npm run build:static && npx serve dist -l 8000",
     "start": "npm run dev",
     "deploy": "npm run build:static && npx wrangler pages deploy dist --project-name=quiz",
     "preview": "npm run build:static && npx wrangler pages dev dist",
