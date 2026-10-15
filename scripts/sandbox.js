@@ -10,7 +10,6 @@
    causes a blur / visibility / fullscreen event, which this module turns into
    a timestamped strike. Deterrence plus an audit trail, not a kernel lock.
    ========================================================================== */
-
 import { S, cfg, bus, EV, Stage, Level, recordIncident, toast, now } from './session.js';
 import * as view from './render.js';
 
@@ -38,13 +37,13 @@ export async function enterFullscreen() {
 
 export function exitFullscreen() {
   const fn = document.exitFullscreen || document.webkitExitFullscreen;
-  if (isFullscreen() && fn) Promise.resolve(fn.call(document)).catch(() => {});
+  if (isFullscreen() && fn) Promise.resolve(fn.call(document)).catch(() => { });
 }
 
 function lockKeys() {
   if (navigator.keyboard && typeof navigator.keyboard.lock === 'function') {
     navigator.keyboard.lock(['Escape', 'Tab', 'AltLeft', 'AltRight', 'MetaLeft', 'MetaRight', 'F11', 'F12'])
-      .catch(() => {});
+      .catch(() => { });
   }
 }
 
@@ -61,7 +60,7 @@ function classify(e) {
   const mod = e.ctrlKey || e.metaKey;
 
   if (e.key === 'F12' || (mod && e.shiftKey && ['i', 'j', 'c', 'k'].includes(k))
-      || (e.metaKey && e.altKey && ['i', 'j', 'c', 'u'].includes(k)) || (mod && k === 'u')) return 'DevTools';
+    || (e.metaKey && e.altKey && ['i', 'j', 'c', 'u'].includes(k)) || (mod && k === 'u')) return 'DevTools';
   if (mod && k === 's') return 'Save page';
   if (mod && k === 'p' && S.stage !== Stage.SEALED) return 'Print';
 
