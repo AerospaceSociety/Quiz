@@ -215,7 +215,7 @@ async function onSignin(e) {
       }
       view.signinError(claim.reason === 'ALREADY_SUBMITTED'
         ? 'A sealed submission already exists for this candidate. Contact the invigilator if this is an error.'
-        : 'This candidate is already signed in on another device. Ask the invigilator to release the lock.');
+        : (claim.message || 'This candidate is already signed in on another device. Ask the invigilator to release the lock.'));
       return;
     }
     $('in-claim-code').value = '';

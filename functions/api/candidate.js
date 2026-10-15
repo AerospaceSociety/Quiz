@@ -150,7 +150,14 @@ async function claim(env, uid, payload) {
   const previousSubmission = await getDocument(env, `submissions/${uid}`);
   if (previousSubmission) throw new HttpError(409, 'This account has already submitted');
   const priorClaim = await getDocument(env, `candidate_claims/${uid}`);
-  if (priorClaim && priorClaim.data.identityKey !== identityKey) throw new HttpError(409, 'This account is already bound to a different candidate');
+  if (priorClaim && priorClaim.data.identityKey !== identityKey) {
+    const priorSess = await getDocument(env, `sessions/${uid}`);
+    const isLive = priorSess
+      && priorSess.data.status !== 'submitted'
+      && ['protocol', 'exam'].includes(priorSess.data.stage)
+      && (Date.now() - (Number(priorSess.data.heartbeatAt) || 0)) < 90000;
+    if (isLive) throw new HttpError(409, 'This terminal is actively running an examination for another candidate');
+  }
   const existing = await getDocument(env, `identities/${identityKey}`);
   if (existing && existing.data.state === 'sealed') throw new HttpError(409, 'This candidate has already submitted');
   if (existing && existing.data.uid !== uid) {

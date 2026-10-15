@@ -197,6 +197,20 @@ export async function claimIdentity(claimCode, profile) {
     trackOp('write', 'identities');
     return { ok: true, identityKey: result.identityKey, profile: result.profile };
   } catch (err) {
+    if (err.status === 409 && (/different candidate/i.test(err.message) || /another candidate/i.test(err.message))) {
+      try {
+        await signOutUser();
+        await signInCandidate();
+        const retryResult = await candidateRequest('claim', { claimCode, ...profile });
+        candidateIdentityKey = retryResult.identityKey;
+        trackOp('write', 'identities');
+        return { ok: true, identityKey: retryResult.identityKey, profile: retryResult.profile };
+      } catch (retryErr) {
+        if (retryErr.status === 403) return { ok: false, reason: 'NOT_ROSTERED', message: retryErr.message };
+        if (retryErr.status === 409) return { ok: false, reason: /already submitted/i.test(retryErr.message) ? 'ALREADY_SUBMITTED' : 'ACTIVE_ELSEWHERE', message: retryErr.message };
+        throw retryErr;
+      }
+    }
     if (err.status === 403) return { ok: false, reason: 'NOT_ROSTERED', message: err.message };
     if (err.status === 409) return { ok: false, reason: /already submitted/i.test(err.message) ? 'ALREADY_SUBMITTED' : 'ACTIVE_ELSEWHERE', message: err.message };
     throw err;
