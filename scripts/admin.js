@@ -940,8 +940,9 @@ function wire() {
   $('btn-denied-signout').addEventListener('click', () => fb.signOutUser());
 
   $('btn-ctl-start').addEventListener('click', () => {
-    if (!confirm(`Release paper ${settings.meta.paperId} to every waiting candidate now? The ${Math.round(settings.exam.durationSeconds / 60)}-minute window starts on the server clock.`)) return;
-    command(() => fb.setControl({ status: 'active', restart: true, durationSeconds: settings.exam.durationSeconds, paperId: settings.meta.paperId }), 'Paper released.');
+    const bufferSec = Number(settings.exam?.startBufferSeconds) || 45;
+    if (!confirm(`Release paper ${settings.meta.paperId} to every waiting candidate now? The ${Math.round(settings.exam.durationSeconds / 60)}-minute window (+${bufferSec}s candidate buffer) starts on the server clock.`)) return;
+    command(() => fb.setControl({ status: 'active', restart: true, durationSeconds: settings.exam.durationSeconds, extensionSeconds: bufferSec, paperId: settings.meta.paperId }), `Paper released (+${bufferSec}s start buffer).`);
   });
   $('btn-ctl-extend').addEventListener('click', () => {
     if (!confirm('Extend the examination window by 5 minutes for all candidates?')) return;

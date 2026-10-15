@@ -423,6 +423,7 @@ function subscribeControl() {
   }
   controlUnsub = fb.watchControl((c) => {
     const prev = control.status;
+    const prevExt = control.extensionSeconds;
     control = c;
     applyStillsPurgeMarker();
     bus.emit(EV.CONTROL, c);
@@ -432,7 +433,7 @@ function subscribeControl() {
     }
     if (S.stage === Stage.EXAM) {
       if (c.status === 'ended') seal('EXAM_ENDED');
-      else if (c.extensionSeconds && prev === 'active') toast('Time updated', 'The invigilator adjusted the examination window.', 'info', 5000);
+      else if (c.extensionSeconds !== prevExt && prev === 'active') toast('Time updated', 'The invigilator adjusted the examination window.', 'info', 5000);
     }
   });
 }

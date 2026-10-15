@@ -11,6 +11,7 @@
   },
   "exam": {
     "durationSeconds": 2700,
+    "startBufferSeconds": 45,
     "warnAtSeconds": 600,
     "criticalAtSeconds": 300,
     "itemsPerModule": 40,

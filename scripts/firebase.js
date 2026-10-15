@@ -431,7 +431,8 @@ export async function setControl(patch) {
   if (patch.status === 'active' && patch.restart) {
     delete body.restart;
     body.startedAt = ts();
-    body.extensionSeconds = 0;
+    body.extensionSeconds = Number.isFinite(patch.extensionSeconds) ? patch.extensionSeconds : 45;
+    body.startBufferSeconds = body.extensionSeconds;
     body.eventEndedAt = fs.deleteField();
     body.retentionPurgedAt = fs.deleteField();
   } else if (patch.status === 'ended') {
