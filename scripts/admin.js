@@ -109,6 +109,7 @@ function rows() {
       s,
       sub,
       name: (s && s.name) || c.name || '—',
+      attemptedBy: (s && s.attemptedBy) || (s && s.claimedBy) || (c && c.attemptedBy) || '',
       schoolUid: (s && s.schoolUid) || c.schoolUid || '—',
       teamId: (s && s.teamId) || c.teamId || '—',
       division: (s && s.division) || c.division || '—',
@@ -215,7 +216,7 @@ function card(r) {
       h('span', { class: 'status', dataset: { state: r.status } }, STATUS_LABEL[r.status]),
       h('span', { class: 'ccard__age' }, r.status === 'submitted' ? 'sealed' : ago(r.age))),
     h('div', { class: 'ccard__name' }, r.name),
-    h('div', { class: 'ccard__meta' }, `${r.schoolUid} · ${r.teamId} · ${r.division}`),
+    h('div', { class: 'ccard__meta' }, `${r.schoolUid} · ${r.teamId} · ${r.division}${r.attemptedBy && r.attemptedBy !== r.name ? ` · (${r.attemptedBy})` : ''}`),
     h('div', { class: 'ccard__progress' },
       h('span', { class: 'meter' }, h('i', { style: { transform: `scaleX(${pct / 100})` } })),
       h('span', null, `${r.answered}/${r.total || '—'}`)),
@@ -705,22 +706,35 @@ async function parseRosterFile(file) {
     const headers = rows[0].map((h) => h.trim().toLowerCase());
     const sIdx = headers.findIndex((h) => h.includes('school'));
     const tIdx = headers.findIndex((h) => h.includes('team'));
-    const nIdx = headers.findIndex((h) => h.includes('name') || h.includes('candidate') || h.includes('student'));
-    const mIdx = headers.findIndex((h) => h.includes('member'));
+    const mIdx = headers.findIndex((h) => h.includes('member') && !h.includes('name'));
     const dIdx = headers.findIndex((h) => h.includes('division'));
     const cIdx = headers.findIndex((h) => h.includes('claim') || h.includes('access'));
 
-    if (sIdx === -1 || tIdx === -1 || nIdx === -1) {
-      throw new Error('CSV header must contain "schoolUid", "teamId", and "name" columns.');
+    // Detect all name columns (e.g. Name, Name 1, Name 2, Member 1 Name, Participant 1, Candidate, etc.)
+    const nameIndices = [];
+    headers.forEach((h, idx) => {
+      if (idx !== sIdx && idx !== tIdx && idx !== cIdx && idx !== dIdx) {
+        if (h.includes('name') || h.includes('candidate') || h.includes('student') || /^member\s*\d*$/i.test(h) || /^participant\s*\d*$/i.test(h)) {
+          nameIndices.push(idx);
+        }
+      }
+    });
+
+    if (sIdx === -1 || tIdx === -1 || !nameIndices.length) {
+      throw new Error('CSV header must contain "schoolUid", "teamId", and at least one "name" column (e.g. "Name 1, Name 2").');
     }
 
     for (let i = 1; i < rows.length; i++) {
       const cols = rows[i].map((c) => c.trim());
-      if (cols.length <= Math.max(sIdx, tIdx, nIdx)) continue;
+      if (cols.length <= Math.max(sIdx, tIdx, nameIndices[0])) continue;
+      const memberNames = nameIndices.map((idx) => (cols[idx] || '').trim()).filter(Boolean);
+      const combinedName = memberNames.join(' & ');
+      if (!combinedName) continue;
       rawList.push({
         schoolUid: cols[sIdx],
         teamId: cols[tIdx],
-        name: cols[nIdx],
+        name: combinedName,
+        members: memberNames,
         memberId: mIdx !== -1 ? cols[mIdx] : '',
         division: dIdx !== -1 ? cols[dIdx] : '',
         claimCode: cIdx !== -1 ? cols[cIdx] : ''
@@ -737,13 +751,14 @@ async function parseRosterFile(file) {
     const cleanTeamId = teamId.replace(/-M\d{1,2}$/i, '');
     if (!new RegExp(settings.registry.schoolUidPattern, 'i').test(schoolUid)) throw new Error(`Invalid school UID: ${schoolUid}`);
     if (!new RegExp(settings.registry.teamIdPattern, 'i').test(teamId)) throw new Error(`Invalid team ID: ${teamId}`);
-    if (candidateName.length < settings.registry.minNameLength || candidateName.length > 80 || !/^[\p{L}][\p{L}\p{M} .'-]*$/u.test(candidateName)) throw new Error(`Invalid candidate name: ${candidateName}`);
+    if (candidateName.length < settings.registry.minNameLength || candidateName.length > 200 || !/^[\p{L}][\p{L}\p{M} .',&/()+-]*$/u.test(candidateName)) throw new Error(`Invalid candidate name: ${candidateName}`);
     const claimCode = String(item.claimCode || randomHex(16)).trim().toLowerCase();
     if (!/^[0-9a-f]{32}$/.test(claimCode)) throw new Error(`Invalid 32-character access code for ${item.name}.`);
     const rosterKey = (await sha256Hex(`quizzitch-roster-claim-v1|${claimCode}`)).slice(0, 40);
     const memberId = String(item.memberId || '').trim().toUpperCase();
     if (memberId.length > 80 || !/^[A-Z0-9-]*$/.test(memberId)) throw new Error(`Invalid member ID for ${item.name}.`);
     const identityKey = (await sha256Hex(`quizzitch-candidate-identity-v1|${JSON.stringify([schoolUid.toLocaleLowerCase('en-US'), teamId.toLocaleLowerCase('en-US'), candidateName.toLocaleLowerCase('en-US'), memberId])}`)).slice(0, 40);
+    const members = Array.isArray(item.members) && item.members.length ? item.members : [candidateName];
     entries.push({
       identityKey,
       rosterKey,
@@ -752,6 +767,7 @@ async function parseRosterFile(file) {
       teamId,
       cleanTeamId,
       name: candidateName,
+      members,
       memberId,
       division: String(item.division || '').trim().toUpperCase()
     });

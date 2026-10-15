@@ -152,8 +152,8 @@ function validateName() {
   const value = input.value.normalize('NFKC').trim().replace(/\s+/g, ' ');
   input.value = value;
   const min = settings.registry.minNameLength;
-  if (value.length < min || !/^[\p{L}][\p{L}\p{M} .'-]*$/u.test(value)) {
-    view.fieldState('in-name', 'hint-name', false, 'Enter your full name as registered (letters only).');
+  if (value.length < min || !/^[\p{L}][\p{L}\p{M} .',&/()+-]*$/u.test(value)) {
+    view.fieldState('in-name', 'hint-name', false, 'Enter your name (letters only).');
     return null;
   }
   view.fieldState('in-name', 'hint-name', true, 'Name accepted');
@@ -249,6 +249,7 @@ async function onSignin(e) {
         teamId: cleanTeamId,
         memberId: memberId || '',
         name: roster.name,
+        attemptedBy: (claim.profile && claim.profile.attemptedBy) || name,
         division: division.code,
         schoolName: roster.schoolName,
         rosterVerified: true,
@@ -260,10 +261,11 @@ async function onSignin(e) {
     if (own && own.identityKey === identityKey) S.strikes = Math.max(S.strikes, Number(own.strikes) || 0);
 
     if (!(await startTelemetry())) throw new Error('Secure session setup failed. Check your connection and ask an invigilator for help.');
+    const attemptedNote = S.candidate.attemptedBy && S.candidate.attemptedBy !== S.candidate.name ? ` (attempted by ${S.candidate.attemptedBy})` : '';
     recordIncident({
       type: 'SIGNED_IN',
       level: Level.INFO,
-      message: `Authenticated ${S.candidate.name} · ${cleanTeamId}${memberId ? ` (${memberId})` : ''} · ${schoolUid}${roster.verified ? ' (roster verified)' : ' (roster unverified)'}`
+      message: `Authenticated ${S.candidate.name}${attemptedNote} · ${cleanTeamId}${memberId ? ` (${memberId})` : ''} · ${schoolUid}${roster.verified ? ' (roster verified)' : ' (roster unverified)'}`
     });
     goCalibrate();
   } catch (err) {

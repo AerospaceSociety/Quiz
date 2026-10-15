@@ -92,7 +92,8 @@ function cleanSession(data, uid, identityKey, previous = {}) {
     sessionId: previous.sessionId || sessionId,
     schoolUid: shortString('schoolUid', 80),
     teamId: shortString('teamId', 80),
-    name: shortString('name', 120),
+    name: shortString('name', 200),
+    attemptedBy: shortString('attemptedBy', 120) || previous.attemptedBy || '',
     division: shortString('division', 24),
     schoolName: shortString('schoolName', 120),
     stage,
@@ -131,8 +132,13 @@ async function claim(env, uid, payload) {
   if (identityKey !== expectedIdentityKey) throw new HttpError(503, 'Roster identity configuration is invalid');
   const team = String(payload.teamId || '').trim();
   const registeredTeams = [profile.rawTeamId, profile.teamId].filter(Boolean).map(normal);
-  if (normal(payload.schoolUid) !== normal(profile.schoolUid) || !registeredTeams.includes(normal(team)) || normal(payload.name) !== normal(profile.name)) {
+  if (normal(payload.schoolUid) !== normal(profile.schoolUid) || !registeredTeams.includes(normal(team))) {
     throw new HttpError(403, 'Entered candidate details do not match the roster');
+  }
+
+  const attemptedByName = String(payload.name || '').normalize('NFKC').trim().replace(/\s+/g, ' ');
+  if (!attemptedByName) {
+    throw new HttpError(400, 'Candidate name is required');
   }
 
   const previousSubmission = await getDocument(env, `submissions/${uid}`);
@@ -156,6 +162,8 @@ async function claim(env, uid, payload) {
     teamId: profile.teamId,
     rawTeamId: profile.rawTeamId || profile.teamId,
     name: profile.name,
+    attemptedBy: attemptedByName,
+    claimedBy: attemptedByName,
     memberId: profile.memberId || (/-M\d{1,2}$/i.test(profile.rawTeamId || '') ? profile.rawTeamId : ''),
     division: rosterDivision(profile),
     isIndividual: String(profile.schoolUid || '').includes('-IND-'),
@@ -198,7 +206,7 @@ async function session(env, uid, payload) {
       throw new HttpError(403, 'The exam is not currently accepting live session updates');
     }
   }
-  if (data.schoolUid !== identity.data.schoolUid || normal(data.name) !== normal(identity.data.name) || ![identity.data.teamId, identity.data.rawTeamId].map(normal).includes(normal(data.teamId)) || (identity.data.division && data.division !== identity.data.division)) {
+  if (data.schoolUid !== identity.data.schoolUid || ![identity.data.teamId, identity.data.rawTeamId].map(normal).includes(normal(data.teamId)) || (identity.data.division && data.division !== identity.data.division)) {
     throw new HttpError(403, 'Session identity does not match the roster');
   }
   await commitWrites(env, [previous
@@ -587,7 +595,7 @@ async function seal(env, uid, payload) {
   const pack = payload.package;
   const sub = pack && pack.submission;
   const submissionKeys = new Set(['v', 'uid', 'sessionId', 'paperId', 'candidate', 'identityKey', 'reason', 'verdict', 'strikes', 'advisories', 'startedAt', 'sealedAt', 'elapsedSec', 'clockSource', 'resumes', 'total', 'answered', 'unanswered', 'marked', 'modules', 'items', 'salt', 'checksum', 'checksumAlgo']);
-  const candidateKeys = new Set(['schoolUid', 'teamId', 'memberId', 'name', 'division', 'schoolName', 'rosterVerified', 'isIndividual', 'consentVersion', 'consentAt']);
+  const candidateKeys = new Set(['schoolUid', 'teamId', 'memberId', 'name', 'attemptedBy', 'division', 'schoolName', 'rosterVerified', 'isIndividual', 'consentVersion', 'consentAt']);
   if (!hasOnlyKeys(sub, submissionKeys) || !hasOnlyKeys(sub.candidate, candidateKeys)
     || ![2, 3].includes(sub.v) || sub.uid !== uid || typeof sub.identityKey !== 'string' || !/^[a-f0-9]{40}$/.test(sub.identityKey)
     || !validText(sub.sessionId, 80) || !sub.sessionId || !validText(sub.paperId, 80) || !sub.paperId
@@ -597,7 +605,8 @@ async function seal(env, uid, payload) {
     || !Number.isSafeInteger(sub.resumes) || sub.resumes < 0 || sub.resumes > 1000
     || !validText(sub.checksumAlgo, 64) || sub.checksumAlgo !== 'SHA-256(salt|canonicalJSON(body))'
     || !validText(sub.candidate.schoolUid, 80) || !validText(sub.candidate.teamId, 80)
-    || !validText(sub.candidate.memberId, 80) || !validText(sub.candidate.name, 120)
+    || !validText(sub.candidate.memberId, 80) || !validText(sub.candidate.name, 200)
+    || (sub.candidate.attemptedBy != null && !validText(sub.candidate.attemptedBy, 120))
     || !validText(sub.candidate.division, 24) || !validText(sub.candidate.schoolName, 120)
     || sub.candidate.rosterVerified !== true || typeof sub.candidate.isIndividual !== 'boolean'
     || !validText(sub.candidate.consentVersion, 100) || !Number.isSafeInteger(sub.candidate.consentAt) || sub.candidate.consentAt <= 0

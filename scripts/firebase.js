@@ -585,6 +585,7 @@ export async function uploadRoster(entries) {
         teamId: entry.cleanTeamId || String(entry.teamId || '').replace(/-M\d{1,2}$/i, ''),
         rawTeamId: entry.teamId || '',
         name: entry.name,
+        members: Array.isArray(entry.members) && entry.members.length ? entry.members : [entry.name],
         memberId: entry.memberId || '',
         division: entry.division || '',
         createdAt: ts(),

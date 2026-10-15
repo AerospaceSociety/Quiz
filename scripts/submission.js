@@ -57,6 +57,7 @@ export function sessionPatch() {
     schoolUid: S.candidate.schoolUid,
     teamId: S.candidate.teamId,
     name: S.candidate.name,
+    attemptedBy: S.candidate.attemptedBy || S.candidate.name,
     division: S.candidate.division,
     schoolName: S.candidate.schoolName || '',
     stage: S.stage,
