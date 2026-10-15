@@ -773,7 +773,9 @@ async function onRosterFile() {
       setText('roster-status', 'Cancelled.');
       return;
     }
-    const codesCsv = new Blob([`\uFEFF${toCSV(entries.map(({ schoolUid, teamId, name, memberId, division, claimCode }) => ({ schoolUid, teamId, name, memberId, division, claimCode })))}`], { type: 'text/csv;charset=utf-8' });
+    const csvHeader = ['schoolUid', 'teamId', 'name', 'memberId', 'division', 'claimCode'];
+    const csvRows = entries.map(({ schoolUid, teamId, name, memberId, division, claimCode }) => [schoolUid, teamId, name, memberId || '', division || '', claimCode]);
+    const codesCsv = new Blob([`\uFEFF${toCSV(csvHeader, csvRows)}`], { type: 'text/csv;charset=utf-8' });
     downloadBlob(codesCsv, 'quizzitch-roster-access-codes.csv');
     const n = await fb.uploadRoster(entries);
     $('file-roster').value = '';

@@ -175,4 +175,19 @@ export function csvCell(v) {
   return /[",\r\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
 }
 
-export const toCSV = (header, rows) => [header, ...rows].map((r) => r.map(csvCell).join(',')).join('\r\n');
+export function toCSV(headerOrData, rows) {
+  if (Array.isArray(headerOrData) && rows === undefined) {
+    if (!headerOrData.length) return '';
+    if (Array.isArray(headerOrData[0])) {
+      return headerOrData.map((r) => r.map(csvCell).join(',')).join('\r\n');
+    }
+    if (typeof headerOrData[0] === 'object' && headerOrData[0] !== null) {
+      const keys = Object.keys(headerOrData[0]);
+      const dataRows = headerOrData.map((item) => keys.map((k) => item[k]));
+      return [keys, ...dataRows].map((r) => r.map(csvCell).join(',')).join('\r\n');
+    }
+  }
+  const safeRows = Array.isArray(rows) ? rows : [];
+  return [headerOrData, ...safeRows].map((r) => r.map(csvCell).join(',')).join('\r\n');
+}
+
