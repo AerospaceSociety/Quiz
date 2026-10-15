@@ -15,9 +15,10 @@ const STAGES = {
   [Stage.CALIBRATE]: 'stage-calibrate',
   [Stage.PROTOCOL]: 'stage-protocol',
   [Stage.EXAM]: 'stage-exam',
+  [Stage.SUBMITTING]: 'stage-submitting',
   [Stage.SEALED]: 'stage-sealed'
 };
-const STEP_INDEX = { signin: 1, calibrate: 2, protocol: 3, exam: 4, sealed: 5 };
+const STEP_INDEX = { signin: 1, calibrate: 2, protocol: 3, exam: 4, submitting: 4, sealed: 5 };
 const LETTER = (i) => String.fromCharCode(65 + i);
 const sign = (v) => (v > 0 ? `+${v}` : v < 0 ? `−${Math.abs(v)}` : '0');
 
@@ -487,8 +488,8 @@ export function paintDispatch(d) {
     recorded: 'Recorded in examination database',
     queued: 'Queued — retrying automatically (keep this tab open)',
     'offline-mode': 'Rehearsal mode — not transmitted',
-    dispatched: 'Dispatched',
-    failed: 'Dispatch failed — database record is authoritative',
+    dispatched: 'Dispatched to mirror',
+    failed: 'Mirror unavailable — database record is authoritative',
     disabled: 'Not configured'
   };
   const fbNode = $('dp-firebase');
@@ -499,7 +500,26 @@ export function paintDispatch(d) {
   }
   if (jfNode) {
     jfNode.textContent = label[d.jotform] || d.jotform;
-    jfNode.dataset.state = d.jotform === 'dispatched' ? 'pass' : d.jotform === 'sending' ? 'busy' : d.jotform === 'disabled' ? 'idle' : 'fail';
+    jfNode.dataset.state = d.jotform === 'dispatched' ? 'pass' : d.jotform === 'sending' ? 'busy' : d.jotform === 'disabled' ? 'idle' : d.firebase === 'recorded' ? 'idle' : 'fail';
+  }
+}
+
+export function paintSubmitting(step, detail) {
+  if (step === 2) {
+    const s2 = $('sub-step-2');
+    if (s2) {
+      s2.classList.add('is-complete');
+      s2.classList.remove('is-active');
+      const b = s2.querySelector('.submitting-step__badge');
+      if (b) { b.className = 'submitting-step__badge'; b.textContent = '✓'; }
+    }
+    const s3 = $('sub-step-3');
+    if (s3) {
+      s3.classList.add('is-active');
+      const b = s3.querySelector('.submitting-step__badge');
+      if (b) { b.className = 'submitting-step__badge submitting-step__badge--spin'; b.textContent = ''; }
+      if (detail) setText('sub-step-3-text', detail);
+    }
   }
 }
 

@@ -326,7 +326,7 @@ function startTripwire() {
 let unloadPromptAt = 0;
 
 function onBeforeUnload(e) {
-  if (!inExam() || !cfg().security.warnOnUnload) return;
+  if ((!inExam() && S.stage !== Stage.SUBMITTING) || !cfg().security.warnOnUnload) return;
   unloadPromptAt = performance.now();
   e.preventDefault();
   e.returnValue = '';
@@ -336,7 +336,7 @@ function onBeforeUnload(e) {
 export const unloadPromptWithin = (ms) => unloadPromptAt > 0 && performance.now() - unloadPromptAt < ms;
 
 function onPopState() {
-  if (!inExam()) return;
+  if (!inExam() && S.stage !== Stage.SUBMITTING) return;
   history.pushState({ qz: 1 }, '', location.href);
   recordIncident({ type: 'NAV_ATTEMPT', level: Level.ADVISORY, message: 'Browser back/forward navigation intercepted', cooldownMs: 5000 });
 }

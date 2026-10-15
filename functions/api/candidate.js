@@ -663,7 +663,7 @@ async function seal(env, uid, payload) {
     || !validText(sub.candidate.schoolUid, 80) || !validText(sub.candidate.teamId, 80)
     || !validText(sub.candidate.memberId, 80) || !validText(sub.candidate.name, 200)
     || (sub.candidate.attemptedBy != null && !validText(sub.candidate.attemptedBy, 120))
-    || !validText(sub.candidate.division, 24) || !validText(sub.candidate.schoolName, 120)
+    || !validText(sub.candidate.division, 24) || (sub.candidate.schoolName != null && !validText(sub.candidate.schoolName, 200))
     || sub.candidate.rosterVerified !== true || typeof sub.candidate.isIndividual !== 'boolean'
     || !validText(sub.candidate.consentVersion, 100) || !Number.isSafeInteger(sub.candidate.consentAt) || sub.candidate.consentAt <= 0
     || !Array.isArray(sub.items) || sub.items.length < 1 || sub.items.length > 200
@@ -744,7 +744,7 @@ async function seal(env, uid, payload) {
   const finalIdentity = { ...identity.data, state: 'sealed', updatedAt: receivedAt };
   const writes = [
     { path: `submissions/${uid}`, data: finalSubmission, create: true },
-    { path: `sessions/${uid}`, data: finalSession, updateTime: sess.updateTime },
+    { path: `sessions/${uid}`, data: finalSession },
     { path: `identities/${sub.identityKey}`, data: finalIdentity, updateTime: identity.updateTime },
     { path: `candidate_papers/${uid}`, delete: true, updateTime: assignedPaper.updateTime }
   ];

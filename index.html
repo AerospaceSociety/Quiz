@@ -292,6 +292,51 @@
     </div>
   </div>
 
+  <!-- ════════ STAGE SUBMITTING · FULLSCREEN SUBMISSION IN PROGRESS ════════ -->
+  <main class="stage stage--center submitting-stage" id="stage-submitting" hidden>
+    <div class="wrap wrap--narrow">
+      <section class="card submitting-card">
+        <div class="submitting-animation" aria-hidden="true">
+          <div class="submitting-spinner"></div>
+          <div class="submitting-lock-icon">
+            <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+              <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+            </svg>
+          </div>
+        </div>
+
+        <h1 class="submitting-title" id="submitting-title">Submitting Examination Responses…</h1>
+        <p class="submitting-lede" id="submitting-lede">Cryptographically sealing your answers with SHA-256 and transmitting to the secure examination database.</p>
+
+        <!-- CRITICAL WARNING BANNER -->
+        <div class="submitting-warning" role="alert">
+          <div class="submitting-warning__icon" aria-hidden="true">⚠️</div>
+          <div class="submitting-warning__content">
+            <strong class="submitting-warning__heading">DO NOT REFRESH OR CLOSE THIS TAB</strong>
+            <p class="submitting-warning__text">Your responses are actively being sealed and recorded. Closing, reloading, or navigating away from this window will interrupt the submission process. You will be redirected to your official receipt automatically once verified.</p>
+          </div>
+        </div>
+
+        <!-- PROGRESS STEPS -->
+        <div class="submitting-steps" id="submitting-steps">
+          <div class="submitting-step is-complete" id="sub-step-1">
+            <span class="submitting-step__badge">✓</span>
+            <span class="submitting-step__text">Cryptographic checksum &amp; payload sealed</span>
+          </div>
+          <div class="submitting-step is-active" id="sub-step-2">
+            <span class="submitting-step__badge submitting-step__badge--spin"></span>
+            <span class="submitting-step__text" id="sub-step-2-text">Transmitting to examination database…</span>
+          </div>
+          <div class="submitting-step" id="sub-step-3">
+            <span class="submitting-step__badge">3</span>
+            <span class="submitting-step__text" id="sub-step-3-text">Verifying server receipt &amp; generating official proof</span>
+          </div>
+        </div>
+      </section>
+    </div>
+  </main>
+
   <!-- ════════ STAGE 5 · RECEIPT ════════ -->
   <main class="stage" id="stage-sealed" hidden>
     <div class="wrap wrap--narrow">

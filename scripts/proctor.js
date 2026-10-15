@@ -199,6 +199,38 @@ function poseFromMatrix(m) {
   return { yaw: Math.atan2(fx, fz) * RAD, pitch: Math.asin(clamp(fy, -1, 1)) * RAD };
 }
 
+let lastLandmarkerTimestamp = 0;
+let isRecoveringLandmarker = false;
+
+function nextLandmarkerTimestamp(providedTs) {
+  const now = typeof providedTs === 'number' && !isNaN(providedTs) && providedTs > 0
+    ? providedTs
+    : performance.now();
+  const safeTs = Math.max(Math.round(now), Math.round(lastLandmarkerTimestamp + 1));
+  lastLandmarkerTimestamp = safeTs;
+  return safeTs;
+}
+
+async function recoverLandmarker() {
+  if (isRecoveringLandmarker) return;
+  isRecoveringLandmarker = true;
+  try {
+    if (landmarker && typeof landmarker.close === 'function') {
+      try { landmarker.close(); } catch (_) {}
+    }
+  } catch (_) {}
+  landmarker = null;
+  loadingModel = null;
+  try {
+    await loadModel();
+    console.info('[proctor] FaceLandmarker recovered successfully');
+  } catch (err) {
+    console.warn('[proctor] landmarker recovery failed:', err.message);
+  } finally {
+    isRecoveringLandmarker = false;
+  }
+}
+
 /** Runs one throttled sample: draw → light/freeze → inference → pose. */
 function sample(ts) {
   const s = cfg().proctoring;
@@ -215,33 +247,43 @@ function sample(ts) {
   let pose = null;
   let box = null;
   if (landmarker) {
-    const res = landmarker.detectForVideo(frame, ts);
-    const lms = res.faceLandmarks || [];
-    faces = lms.length;
-    if (faces >= 1) {
-      const mats = res.facialTransformationMatrixes || [];
-      if (mats[0] && mats[0].data) {
-        pose = poseFromMatrix(mats[0].data);
-        lastGoodPose = pose;
-        lastGoodPoseTime = ts;
-        nullMatrixSince = 0;
-      } else {
-        // Facial transform matrix missing: hold last good pose up to 3s
-        if (!nullMatrixSince) nullMatrixSince = ts;
-        if (lastGoodPose && (ts - lastGoodPoseTime <= 3000)) {
-          pose = lastGoodPose;
+    try {
+      const safeTs = nextLandmarkerTimestamp(ts);
+      const res = landmarker.detectForVideo(frame, safeTs);
+      const lms = res.faceLandmarks || [];
+      faces = lms.length;
+      if (faces >= 1) {
+        const mats = res.facialTransformationMatrixes || [];
+        if (mats[0] && mats[0].data) {
+          pose = poseFromMatrix(mats[0].data);
+          lastGoodPose = pose;
+          lastGoodPoseTime = safeTs;
+          nullMatrixSince = 0;
         } else {
-          pose = null;
+          // Facial transform matrix missing: hold last good pose up to 3s
+          if (!nullMatrixSince) nullMatrixSince = safeTs;
+          if (lastGoodPose && (safeTs - lastGoodPoseTime <= 3000)) {
+            pose = lastGoodPose;
+          } else {
+            pose = null;
+          }
         }
+        let minX = 1, minY = 1, maxX = 0, maxY = 0;
+        for (const p of lms[0]) {
+          if (p.x < minX) minX = p.x; if (p.x > maxX) maxX = p.x;
+          if (p.y < minY) minY = p.y; if (p.y > maxY) maxY = p.y;
+        }
+        box = { x: minX, y: minY, w: maxX - minX, h: maxY - minY };
+      } else {
+        nullMatrixSince = 0;
       }
-      let minX = 1, minY = 1, maxX = 0, maxY = 0;
-      for (const p of lms[0]) {
-        if (p.x < minX) minX = p.x; if (p.x > maxX) maxX = p.x;
-        if (p.y < minY) minY = p.y; if (p.y > maxY) maxY = p.y;
+    } catch (err) {
+      console.warn('[proctor] landmarker inference failed:', err.message);
+      const match = String(err && err.message).match(/Current minimum expected timestamp is (\d+)/i);
+      if (match && match[1]) {
+        lastLandmarkerTimestamp = Math.max(lastLandmarkerTimestamp, parseInt(match[1], 10) + 10);
       }
-      box = { x: minX, y: minY, w: maxX - minX, h: maxY - minY };
-    } else {
-      nullMatrixSince = 0;
+      recoverLandmarker();
     }
   }
 
@@ -289,7 +331,7 @@ export function calibrateNeutralPose() {
       pitch: sumPitch / calibrationPoses.length
     };
   }
-  const r = sample(performance.now());
+  const r = sample(nextLandmarkerTimestamp());
   return (r && r.pose) ? { yaw: r.pose.yaw, pitch: r.pose.pitch } : { yaw: 0, pitch: 0 };
 }
 
@@ -298,8 +340,12 @@ export function captureBaseline() {
   if (S.stillsPurged) throw new Error('Reference stills were purged for privacy.');
   const s = cfg().proctoring;
   if (!video || video.readyState < 2) throw new Error('Camera is not streaming yet.');
-  const r = sample(performance.now());
-  if (landmarker && r.faces !== 1) throw new Error(r.faces === 0 ? 'No face detected — look at the camera.' : 'More than one face is in view.');
+  const r = sample(nextLandmarkerTimestamp());
+  if (landmarker && r.faces !== 1) {
+    if (r.faces === 0) throw new Error('No face detected — please look directly at the camera.');
+    if (r.faces > 1) throw new Error('More than one face is in view.');
+    throw new Error('Face calibration in progress — please look steadily at the camera and try again.');
+  }
   const cap = document.createElement('canvas');
   cap.width = s.frameWidth;
   cap.height = s.frameHeight;

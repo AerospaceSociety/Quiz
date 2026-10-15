@@ -15,6 +15,7 @@ export const Stage = Object.freeze({
   CALIBRATE: 'calibrate',
   PROTOCOL: 'protocol',
   EXAM: 'exam',
+  SUBMITTING: 'submitting',
   SEALED: 'sealed'
 });
 

@@ -256,7 +256,7 @@ async function onSignin(e) {
         name: roster.name,
         attemptedBy: (claim.profile && claim.profile.attemptedBy) || name,
         division: (claim.profile && claim.profile.division) || division.code,
-        schoolName: roster.schoolName,
+        schoolName: roster.schoolName || '',
         rosterVerified: true,
         isIndividual,
         consentVersion: roster.consentVersion,
@@ -615,14 +615,10 @@ async function seal(reason) {
   stopTelemetry();
   const pkg = await buildPackage(reason);
   S.sealed = pkg;
-  setStage(Stage.SEALED);
+  setStage(Stage.SUBMITTING);
   freezeState();
   clearSnapshot();
   view.hideLockout();
-  view.renderSealed(pkg, {
-    firebase: fb.isReady() ? 'sending' : 'offline-mode',
-    jotform: settings.jotform.enabled ? 'sending' : 'disabled'
-  });
   exitFullscreen();
   proctor.releaseMedia();
   if (controlUnsub) controlUnsub();
@@ -630,7 +626,10 @@ async function seal(reason) {
   const release = () => fb.signOutUser().catch(() => {});   // frees this terminal for the next candidate
   let status;
   try {
-    status = await dispatch(pkg, () => { view.paintDispatch({ ...status, firebase: 'recorded' }); release(); });
+    status = await dispatch(pkg, () => {
+      view.paintDispatch({ ...status, firebase: 'recorded' });
+      release();
+    });
   } finally {
     S.baseline = null;
     S.thumbs = [];
@@ -640,7 +639,8 @@ async function seal(reason) {
     const baselineImage = $('baseline-img');
     if (baselineImage) baselineImage.removeAttribute('src');
   }
-  view.paintDispatch(status);
+  setStage(Stage.SEALED);
+  view.renderSealed(pkg, status);
   if (status.firebase === 'recorded') release();
 }
 
