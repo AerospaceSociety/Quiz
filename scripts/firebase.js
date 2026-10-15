@@ -197,8 +197,8 @@ export async function claimIdentity(claimCode, profile) {
     trackOp('write', 'identities');
     return { ok: true, identityKey: result.identityKey, profile: result.profile };
   } catch (err) {
-    if (err.status === 403) return { ok: false, reason: 'NOT_ROSTERED' };
-    if (err.status === 409) return { ok: false, reason: /already submitted/i.test(err.message) ? 'ALREADY_SUBMITTED' : 'ACTIVE_ELSEWHERE' };
+    if (err.status === 403) return { ok: false, reason: 'NOT_ROSTERED', message: err.message };
+    if (err.status === 409) return { ok: false, reason: /already submitted/i.test(err.message) ? 'ALREADY_SUBMITTED' : 'ACTIVE_ELSEWHERE', message: err.message };
     throw err;
   }
 }

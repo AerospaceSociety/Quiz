@@ -209,7 +209,8 @@ async function onSignin(e) {
 
     if (!claim.ok) {
       if (claim.reason === 'NOT_ROSTERED') {
-        view.signinError('Candidate identity is not on the authorised event roster. Check details or contact invigilator.');
+        const detail = claim.message && claim.message !== 'Authentication rejected' ? `: ${claim.message}` : '';
+        view.signinError(`Candidate identity is not on the authorised event roster${detail}. Check details or contact invigilator.`);
         return;
       }
       view.signinError(claim.reason === 'ALREADY_SUBMITTED'

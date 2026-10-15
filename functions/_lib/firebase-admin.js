@@ -29,6 +29,11 @@ export function json(data, status = 200, origin = null) {
 export function allowedOrigin(request, env) {
   const origin = request.headers.get('Origin');
   if (!origin) return null;
+  try {
+    const requestOrigin = new URL(request.url).origin;
+    if (origin === requestOrigin) return origin;
+    if (requestOrigin.endsWith('.pages.dev') && origin.endsWith('.pages.dev')) return origin;
+  } catch (_) {}
   const allowed = String(env.ALLOWED_ORIGINS || '').split(',').map((item) => item.trim()).filter(Boolean);
   return allowed.includes(origin) ? origin : false;
 }

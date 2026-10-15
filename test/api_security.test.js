@@ -3,7 +3,8 @@ import { allowedOrigin, HttpError, jsonDepthWithin, readLimitedBody } from '../f
 
 const origin = 'https://quiz.pages.dev';
 assert.equal(allowedOrigin(new Request('https://quiz.pages.dev/api/candidate', { headers: { Origin: origin } }), { ALLOWED_ORIGINS: origin }), origin);
-assert.equal(allowedOrigin(new Request('https://quiz.pages.dev/api/candidate', { headers: { Origin: 'https://evil.example' } }), { ALLOWED_ORIGINS: origin }), false);
+assert.equal(allowedOrigin(new Request('https://quiz-ewy.pages.dev/api/candidate', { headers: { Origin: 'https://quiz-ewy.pages.dev' } }), { ALLOWED_ORIGINS: origin }), 'https://quiz-ewy.pages.dev');
+assert.equal(allowedOrigin(new Request('https://quiz-ewy.pages.dev/api/candidate', { headers: { Origin: 'https://evil.example' } }), { ALLOWED_ORIGINS: origin }), false);
 
 const request = new Request('https://quiz.pages.dev/api/candidate', { method: 'POST', body: '{"action":"time"}' });
 assert.equal(await readLimitedBody(request, 100), '{"action":"time"}');
