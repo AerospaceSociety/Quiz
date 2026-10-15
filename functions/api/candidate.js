@@ -776,6 +776,7 @@ export async function onRequestPost({ request, env }) {
     return json(result, 200, origin);
   } catch (error) {
     const status = error.status || 500;
-    return json({ error: status >= 500 ? 'Candidate service is temporarily unavailable' : error.message || 'Request failed' }, status, origin);
+    const message = error.message || (status >= 500 ? 'Candidate service is temporarily unavailable' : 'Request failed');
+    return json({ error: message }, status, origin);
   }
 }
