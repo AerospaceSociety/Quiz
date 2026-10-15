@@ -1,19 +1,23 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="color-scheme" content="dark">
   <meta name="robots" content="noindex, nofollow">
   <meta name="referrer" content="no-referrer">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://www.gstatic.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob:; connect-src 'self' https://firestore.googleapis.com https://identitytoolkit.googleapis.com https://securetoken.googleapis.com https://www.googleapis.com; object-src 'none'; base-uri 'self'; form-action 'self'">
+  <meta http-equiv="Content-Security-Policy"
+    content="default-src 'self'; script-src 'self' https://www.gstatic.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob:; connect-src 'self' https://firestore.googleapis.com https://identitytoolkit.googleapis.com https://securetoken.googleapis.com https://www.googleapis.com; object-src 'none'; base-uri 'self'; form-action 'self'">
   <title>Quizzitch Command Center · CelesteCon 2026</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap">
+  <link rel="stylesheet"
+    href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap">
   <link rel="stylesheet" href="styles/styles.css">
   <link rel="stylesheet" href="styles/admin.css">
-  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%2307090D'/%3E%3Ccircle cx='16' cy='16' r='10' fill='none' stroke='%23F5A623' stroke-width='1.6' stroke-dasharray='5 3'/%3E%3Ccircle cx='16' cy='16' r='3.5' fill='%2322C3E6'/%3E%3C/svg%3E">
+  <link rel="icon"
+    href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%2307090D'/%3E%3Ccircle cx='16' cy='16' r='10' fill='none' stroke='%23F5A623' stroke-width='1.6' stroke-dasharray='5 3'/%3E%3Ccircle cx='16' cy='16' r='3.5' fill='%2322C3E6'/%3E%3C/svg%3E">
   <script type="module" src="scripts/admin.js"></script>
 </head>
 
@@ -42,14 +46,16 @@
       </div>
       <p class="form-error" id="auth-error" role="alert" hidden></p>
       <button class="btn btn--primary btn--block btn--lg" id="btn-login" type="submit">Sign in</button>
-      <p class="note" style="margin-top:14px">Access is limited to accounts on the <code>admins</code> allowlist in Firestore.</p>
+      <p class="note" style="margin-top:14px">Access is limited to accounts on the <code>admins</code> allowlist in
+        Firestore.</p>
     </form>
   </main>
 
   <main class="stage stage--center" id="view-denied" hidden>
     <section class="terminal">
       <h1 class="terminal__title">Not on the invigilator allowlist</h1>
-      <p class="muted">This account is authenticated but has no <code>admins/{uid}</code> document. A project owner must create one in the Firebase console:</p>
+      <p class="muted">This account is authenticated but has no <code>admins/{uid}</code> document. A project owner must
+        create one in the Firebase console:</p>
       <div class="checksum"><span>Your UID</span><code id="denied-uid">—</code></div>
       <button class="btn btn--ghost btn--block" id="btn-denied-signout" type="button">Sign out</button>
     </section>
@@ -58,11 +64,13 @@
   <!-- ════════ DASHBOARD ════════ -->
   <div class="deck" id="view-deck" hidden>
     <header class="deck__head">
-      <div class="brand"><span class="brand__mark" aria-hidden="true"></span><span class="brand__name">QUIZZITCH</span><span class="brand__sub">Command Center · CelesteCon 2026</span></div>
+      <div class="brand"><span class="brand__mark" aria-hidden="true"></span><span
+          class="brand__name">QUIZZITCH</span><span class="brand__sub">Command Center · CelesteCon 2026</span></div>
 
       <div class="control" aria-label="Examination control">
         <span class="control__state" id="ctl-state" data-state="waiting">WAITING</span>
-        <span class="control__clock" id="ctl-clock" title="Paper time remaining (server start + duration + extensions)">--:--</span>
+        <span class="control__clock" id="ctl-clock"
+          title="Paper time remaining (server start + duration + extensions)">--:--</span>
         <button class="btn btn--accent btn--sm" id="btn-ctl-start" type="button">Release paper</button>
         <button class="btn btn--ghost btn--sm" id="btn-ctl-extend" type="button">+5 min</button>
         <button class="btn btn--submit btn--sm" id="btn-ctl-end" type="button">End &amp; force submit</button>
@@ -93,10 +101,17 @@
     <!-- LIVE -->
     <section class="tabpanel" id="tab-live">
       <div class="toolbar" role="search">
-        <input type="search" id="f-search" placeholder="Search name, School UID, Team ID…" aria-label="Search candidates">
-        <select id="f-school" aria-label="School UID"><option value="">All schools</option></select>
-        <select id="f-team" aria-label="Team ID"><option value="">All teams</option></select>
-        <select id="f-division" aria-label="Division"><option value="">All divisions</option></select>
+        <input type="search" id="f-search" placeholder="Search name, School UID, Team ID…"
+          aria-label="Search candidates">
+        <select id="f-school" aria-label="School UID">
+          <option value="">All schools</option>
+        </select>
+        <select id="f-team" aria-label="Team ID">
+          <option value="">All teams</option>
+        </select>
+        <select id="f-division" aria-label="Division">
+          <option value="">All divisions</option>
+        </select>
         <select id="f-flags" aria-label="Minimum reported strikes">
           <option value="0">Any reported strikes</option>
           <option value="1">≥ 1 reported strike</option>
@@ -117,7 +132,9 @@
       <div class="live">
         <div class="grid" id="grid" aria-live="off"></div>
         <aside class="feed" aria-label="Live activity feed">
-          <header class="feed__head"><h2>Live Activity</h2><span class="feed__live"><i class="dot"></i>STREAMING</span></header>
+          <header class="feed__head">
+            <h2>Live Activity</h2><span class="feed__live"><i class="dot"></i>STREAMING</span>
+          </header>
           <ol class="feed__list" id="feed"></ol>
         </aside>
       </div>
@@ -147,7 +164,17 @@
           <p class="note" id="standings-note">Team score = sum of members' scores. Top seeds highlighted.</p>
           <div class="tablewrap">
             <table class="table table--dense">
-              <thead><tr><th class="num">#</th><th>Team</th><th>School UID</th><th class="num">Members</th><th class="num">Pooled</th><th class="num">Reported strikes</th><th>Seed</th></tr></thead>
+              <thead>
+                <tr>
+                  <th class="num">#</th>
+                  <th>Team</th>
+                  <th>School UID</th>
+                  <th class="num">Members</th>
+                  <th class="num">Pooled</th>
+                  <th class="num">Reported strikes</th>
+                  <th>Seed</th>
+                </tr>
+              </thead>
               <tbody id="standings-body"></tbody>
             </table>
           </div>
@@ -160,31 +187,44 @@
       <div class="tools">
         <section class="card">
           <h2 class="card__title">Seed question bank</h2>
-          <p class="note">Upload a questions JSON array (same shape as <code>config/questions.json</code>). Any <code>correct</code> fields are stripped before upload — candidates can only read the bank while the paper is released.</p>
+          <p class="note">Upload a questions JSON array (same shape as <code>config/questions.json</code>). Any
+            <code>correct</code> fields are stripped before upload — candidates can only read the bank while the paper
+            is released.</p>
           <input type="file" id="file-questions" accept="application/json,.json">
           <p class="tool-status" id="seed-status"></p>
         </section>
         <section class="card">
           <h2 class="card__title">Answer key</h2>
-          <p class="note">Upload <code>{"Q101":[0],"Q104":[0,1]}</code> (zero-based indices into the <em>original</em> option order) or a question array with <code>correct</code> fields. Stored in <code>answer_key/current</code>, readable by invigilators only.</p>
+          <p class="note">Upload <code>{"Q101":[0],"Q104":[0,1]}</code> (zero-based indices into the <em>original</em>
+            option order) or a question array with <code>correct</code> fields. Stored in
+            <code>answer_key/current</code>, readable by invigilators only.</p>
           <input type="file" id="file-key" accept="application/json,.json">
           <p class="tool-status" id="key-status"></p>
         </section>
         <section class="card">
           <h2 class="card__title">Upload candidate roster</h2>
-          <p class="note">Upload CSV or JSON with <code>schoolUid, teamId, name</code> (optional: <code>memberId, division, claimCode</code>). A random private access code is generated per candidate and downloaded after upload. Distribute codes securely; keep the downloaded backup protected. Include <code>claimCode</code> when re-uploading to preserve codes.</p>
+          <p class="note">Upload CSV or JSON with <code>schoolUid, teamId, name</code> (optional:
+            <code>memberId, division, claimCode</code>). A random private access code is generated per candidate and
+            downloaded after upload. Distribute codes securely; keep the downloaded backup protected. Include
+            <code>claimCode</code> when re-uploading to preserve codes.</p>
           <input type="file" id="file-roster" accept=".csv,.json,application/json,text/csv">
           <p class="tool-status" id="roster-status"></p>
         </section>
         <section class="card">
           <h2 class="card__title">Release an identity lock</h2>
-          <p class="note">When a candidate's device fails and they must continue elsewhere. Open the candidate's forensic record and use “Release identity lock”, or paste the identity key here.</p>
-          <div class="btn-row"><input type="text" id="in-identity" class="input" placeholder="identity key (40 hex)"><button class="btn btn--ghost btn--sm" id="btn-release" type="button">Release</button></div>
+          <p class="note">When a candidate's device fails and they must continue elsewhere. Open the candidate's
+            forensic record and use “Release identity lock”, or paste the identity key here.</p>
+          <div class="btn-row"><input type="text" id="in-identity" class="input"
+              placeholder="identity key (40 hex)"><button class="btn btn--ghost btn--sm" id="btn-release"
+              type="button">Release</button></div>
           <p class="tool-status" id="release-status"></p>
         </section>
         <section class="card card--danger">
           <h2 class="card__title">Retention &amp; DPDP compliance</h2>
-          <p class="note">Immediately delete stored reference photos and incident thumbnails from Firestore, clear stills held by connected candidate and admin pages, and prevent this event from storing more stills. A scheduled Cloudflare Worker also purges stored stills 30 days after the event ends. Answers, scores, event text, and checksums remain; copies exported or captured outside the site cannot be recalled.</p>
+          <p class="note">Immediately delete stored reference photos and incident thumbnails from Firestore, clear
+            stills held by connected candidate and admin pages, and prevent this event from storing more stills. A
+            scheduled Cloudflare Worker also purges stored stills 30 days after the event ends. Answers, scores, event
+            text, and checksums remain; copies exported or captured outside the site cannot be recalled.</p>
           <div class="btn-row">
             <button class="btn btn--danger btn--sm" id="btn-purge-stills" type="button">Purge forensic stills</button>
           </div>
@@ -193,7 +233,6 @@
       </div>
     </section>
   </div>
-
   <!-- ════════ FORENSIC MODAL ════════ -->
   <div class="modal" id="modal-forensic" hidden>
     <div class="modal__card forensic" role="dialog" aria-modal="true" aria-labelledby="fx-name">
@@ -237,7 +276,14 @@
         <h3 class="card__title">Chronological ledger</h3>
         <div class="tablewrap tablewrap--tall">
           <table class="table table--dense">
-            <thead><tr><th class="num">T+</th><th>Level</th><th>Type</th><th>Detail</th></tr></thead>
+            <thead>
+              <tr>
+                <th class="num">T+</th>
+                <th>Level</th>
+                <th>Type</th>
+                <th>Detail</th>
+              </tr>
+            </thead>
             <tbody id="fx-ledger"></tbody>
           </table>
         </div>
@@ -247,4 +293,5 @@
 
   <div class="toasts" id="toasts" aria-live="polite"></div>
 </body>
+
 </html>

@@ -98,7 +98,8 @@ export async function startTelemetry() {
   const initialSaved = await fb.writeSession(initial);
   if (fb.isReady() && !initialSaved) {
     closed = false;
-    return false;
+    const detail = typeof fb.getSessionLastError === 'function' ? fb.getSessionLastError() : '';
+    throw new Error(detail ? `Secure session setup failed (${detail})` : 'Secure session setup failed. Check your connection and ask an invigilator for help.');
   }
 
   heartbeat = setInterval(() => {

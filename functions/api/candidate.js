@@ -85,7 +85,13 @@ function cleanSession(data, uid, identityKey, previous = {}) {
   };
   const sessionId = shortString('sessionId', 80);
   if (!sessionId) throw new HttpError(400, 'Session identifier is required');
-  if (previous.sessionId && previous.sessionId !== sessionId) throw new HttpError(409, 'The active session identifier cannot be changed');
+  if (previous.sessionId && previous.sessionId !== sessionId) {
+    if (previous.identityKey === identityKey && previous.status !== 'submitted' && data.stage === 'signin') {
+      data.sessionId = previous.sessionId;
+    } else {
+      throw new HttpError(409, 'The active session identifier cannot be changed');
+    }
+  }
   return {
     uid,
     identityKey,
@@ -206,7 +212,10 @@ async function session(env, uid, payload) {
       throw new HttpError(403, 'The exam is not currently accepting live session updates');
     }
   }
-  if (data.schoolUid !== identity.data.schoolUid || ![identity.data.teamId, identity.data.rawTeamId].map(normal).includes(normal(data.teamId)) || (identity.data.division && data.division !== identity.data.division)) {
+  const candidateTeams = [identity.data.teamId, identity.data.rawTeamId].filter(Boolean).map(normal);
+  if (normal(data.schoolUid) !== normal(identity.data.schoolUid)
+    || !candidateTeams.includes(normal(data.teamId))
+    || (identity.data.division && normal(data.division) !== normal(identity.data.division))) {
     throw new HttpError(403, 'Session identity does not match the roster');
   }
   await commitWrites(env, [previous

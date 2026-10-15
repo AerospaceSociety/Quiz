@@ -216,13 +216,24 @@ export async function getOwnSession() {
 }
 
 /* --- 06 · CANDIDATE WRITES ------------------------------------------------ */
+let lastSessionError = '';
+
+export function getSessionLastError() {
+  return lastSessionError;
+}
+
 export async function writeSession(data) {
-  if (!ready || !auth.currentUser) return false;
+  if (!ready || !auth.currentUser) {
+    lastSessionError = 'Authentication is not ready';
+    return false;
+  }
   try {
     trackOp('write', 'sessions');
     await candidateRequest('session', { identityKey: data.identityKey || candidateIdentityKey, data });
+    lastSessionError = '';
     return true;
   } catch (err) {
+    lastSessionError = err.message || 'Session write failed';
     console.warn('[firebase] session write:', err.message);
     return false;
   }

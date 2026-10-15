@@ -243,15 +243,19 @@ async function onSignin(e) {
       applySnapshot(snap);
     } else {
       resumeSnap = null;
+      if (own && own.sessionId && own.identityKey === identityKey) {
+        S.sessionId = own.sessionId;
+        setText('session-ref', S.sessionId);
+      }
       S.salt = randomHex(16);
       S.identityKey = identityKey;
       S.candidate = {
-        schoolUid,
-        teamId: cleanTeamId,
+        schoolUid: (claim.profile && claim.profile.schoolUid) || schoolUid,
+        teamId: (claim.profile && claim.profile.teamId) || cleanTeamId,
         memberId: memberId || '',
         name: roster.name,
         attemptedBy: (claim.profile && claim.profile.attemptedBy) || name,
-        division: division.code,
+        division: (claim.profile && claim.profile.division) || division.code,
         schoolName: roster.schoolName,
         rosterVerified: true,
         isIndividual,
@@ -261,7 +265,7 @@ async function onSignin(e) {
     }
     if (own && own.identityKey === identityKey) S.strikes = Math.max(S.strikes, Number(own.strikes) || 0);
 
-    if (!(await startTelemetry())) throw new Error('Secure session setup failed. Check your connection and ask an invigilator for help.');
+    await startTelemetry();
     const attemptedNote = S.candidate.attemptedBy && S.candidate.attemptedBy !== S.candidate.name ? ` (attempted by ${S.candidate.attemptedBy})` : '';
     recordIncident({
       type: 'SIGNED_IN',
