@@ -11,5 +11,4 @@ export default {
     console.log(JSON.stringify({ type: 'retention_purge', ...result }));
   }
 };
-
-/* Good */
+/* Not Good */
