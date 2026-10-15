@@ -204,7 +204,15 @@ export function paintCandidate() {
 }
 
 export function buildModuleTabs(onSelect) {
-  mount($('module-tabs'), moduleProgress().map((p) => h('button', {
+  const tabs = $('module-tabs');
+  if (!tabs) return;
+  const s = cfg();
+  if (s.modules.length <= 1 || (s.modules.length === 2 && s.modules[1].isBonus)) {
+    tabs.hidden = true;
+    return;
+  }
+  tabs.hidden = false;
+  mount(tabs, moduleProgress().map((p) => h('button', {
     type: 'button', class: 'mtab', role: 'tab', dataset: { cat: p.module.id }, onclick: () => onSelect(p.module.id)
   },
   h('span', { class: 'mtab__letter' }, p.module.letter),
@@ -232,13 +240,16 @@ export function renderQuestion(onPick) {
   if (!q) return;
   const a = S.answers[S.idx];
   const s = cfg();
-  const sc = s.schemes[q.scheme];
+  const sc = s.schemes[q.scheme] || s.schemes.standard;
   const mod = s.modules.find((m) => m.id === q.catId);
+  const isBonus = q.isBonus || q.segment === 'bonus';
+  const mainTotal = S.paper.filter((item) => !item.isBonus && item.segment !== 'bonus').length || Math.min(40, S.paper.length);
+  const totalDisplay = S.bonusUnlocked ? S.paper.length : mainTotal;
 
-  setText('q-num', `Q${pad(q.n)}`);
-  setText('q-of', `of ${S.paper.length}`);
-  setText('q-module', mod ? `Module ${mod.letter} · ${mod.name}` : '');
-  setText('q-scheme', sc.label);
+  setText('q-num', isBonus ? `Q${pad(q.n)} [BONUS]` : `Q${pad(q.n)}`);
+  setText('q-of', `of ${totalDisplay}`);
+  setText('q-module', isBonus ? '⚡ Bonus Question' : (s.modules.length > 2 && mod ? `Module ${mod.letter} · ${mod.name}` : ''));
+  setText('q-scheme', isBonus ? '⚡ Bonus' : sc.label);
   setText('q-value', `${sign(sc.correct)} / ${sign(sc.incorrect)}`);
   renderRich($('q-stem'), q.question);
   const supp = $('q-supp');
@@ -266,7 +277,7 @@ export function renderQuestion(onPick) {
   markBtn.setAttribute('aria-pressed', a.marked ? 'true' : 'false');
   setText('btn-mark-label', a.marked ? 'Unmark Review' : 'Mark for Review');
   $('btn-prev').disabled = S.idx === 0;
-  $('btn-next').disabled = S.idx === S.paper.length - 1;
+  $('btn-next').disabled = S.idx >= totalDisplay - 1;
   $('btn-clear').disabled = !isAnswered(a);
   paintAnswers();
 }
@@ -276,30 +287,58 @@ export function setPaletteNav(fn) { paletteNav = fn; }
 
 function buildPalette() {
   const s = cfg();
-  mount($('palette-grid'), s.modules.map((m) => {
-    const idxs = S.paper.map((q, i) => (q.catId === m.id ? i : -1)).filter((i) => i > -1);
-    if (!idxs.length) return null;
-    return h('div', { class: 'pgroup' },
-      h('div', { class: 'pgroup__label' }, `Module ${m.letter} · ${m.short}`),
-      h('div', { class: 'pgroup__cells' }, idxs.map((i) => h('button', {
+  const isSingleCategory = s.modules.length <= 1 || (s.modules.length === 2 && s.modules[1].isBonus);
+  const mainQuestions = S.paper.filter((q) => !q.isBonus && q.segment !== 'bonus');
+  const bonusQuestions = S.paper.filter((q) => q.isBonus || q.segment === 'bonus');
+
+  const groups = [];
+  if (isSingleCategory) {
+    const mainIdxs = mainQuestions.map((q) => S.paper.indexOf(q));
+    groups.push(h('div', { class: 'pgroup' },
+      h('div', { class: 'pgroup__cells' }, mainIdxs.map((i) => h('button', {
         type: 'button', id: `pc-${i}`, class: 'pcell', onclick: () => paletteNav && paletteNav(i)
-      }, pad(S.paper[i].n)))));
-  }));
+      }, pad(S.paper[i].n))))));
+
+    if (S.bonusUnlocked && bonusQuestions.length) {
+      const bonusIdxs = bonusQuestions.map((q) => S.paper.indexOf(q));
+      groups.push(h('div', { class: 'pgroup pgroup--bonus' },
+        h('div', { class: 'pgroup__label pgroup__label--bonus', style: 'color: var(--accent, #38bdf8); font-weight: 600;' }, '⚡ Bonus Questions'),
+        h('div', { class: 'pgroup__cells' }, bonusIdxs.map((i) => h('button', {
+          type: 'button', id: `pc-${i}`, class: 'pcell pcell--bonus', onclick: () => paletteNav && paletteNav(i)
+        }, pad(S.paper[i].n))))));
+    }
+  } else {
+    s.modules.forEach((m) => {
+      if (m.isBonus && !S.bonusUnlocked) return;
+      const idxs = S.paper.map((q, i) => (q.catId === m.id ? i : -1)).filter((i) => i > -1);
+      if (!idxs.length) return;
+      groups.push(h('div', { class: `pgroup${m.isBonus ? ' pgroup--bonus' : ''}` },
+        h('div', { class: 'pgroup__label' }, m.isBonus ? '⚡ Bonus Questions' : `Module ${m.letter} · ${m.short}`),
+        h('div', { class: 'pgroup__cells' }, idxs.map((i) => h('button', {
+          type: 'button', id: `pc-${i}`, class: `pcell${m.isBonus ? ' pcell--bonus' : ''}`, onclick: () => paletteNav && paletteNav(i)
+        }, pad(S.paper[i].n))))));
+    });
+  }
+  mount($('palette-grid'), groups);
 }
 
 /** Palette, counters and module tabs — cheap enough to repaint on every response. */
 export function paintAnswers() {
   const grid = $('palette-grid');
-  if (grid && grid.childElementCount === 0) buildPalette();
-  S.paper.forEach((q, i) => {
+  const needsRebuild = !grid || grid.childElementCount === 0 || (S.bonusUnlocked && !document.querySelector('.pgroup--bonus') && S.paper.some((q) => q.isBonus || q.segment === 'bonus'));
+  if (needsRebuild) buildPalette();
+  const activeLen = S.bonusUnlocked ? S.paper.length : S.paper.filter((item) => !item.isBonus && item.segment !== 'bonus').length || Math.min(40, S.paper.length);
+  for (let i = 0; i < activeLen; i++) {
+    const q = S.paper[i];
     const cell = $(`pc-${i}`);
-    if (!cell) return;
+    if (!cell) continue;
     const st = cellState(i);
-    cell.className = `pcell pcell--${st}${i === S.idx ? ' is-current' : ''}`;
+    const isBonus = q && (q.isBonus || q.segment === 'bonus');
+    cell.className = `pcell pcell--${st}${i === S.idx ? ' is-current' : ''}${isBonus ? ' pcell--bonus' : ''}`;
     cell.setAttribute('aria-label', `Question ${q.n}: ${st.replace('-', ' and ')}`);
     if (i === S.idx) cell.setAttribute('aria-current', 'true');
     else cell.removeAttribute('aria-current');
-  });
+  }
   setText('sum-answered', answeredCount());
   setText('sum-unanswered', unansweredCount());
   setText('sum-marked', markedCount());
@@ -360,21 +399,45 @@ export function showFsLock(seconds) {
 
 export const hideFsLock = () => show('modal-fslock', false);
 
-export function openReview(onJump) {
+export function openReview(onJump, onBonusUnlock, canUnlockBonus, remainingTimeText) {
   setText('rv-answered', answeredCount());
   setText('rv-unanswered', unansweredCount());
   setText('rv-marked', markedCount());
-  mount($('rv-modules'), moduleProgress().map((p) => h('li', null,
-    h('span', null, `Module ${p.module.letter} · ${p.module.short}`),
-    h('span', { class: 'meter' }, h('i', { style: { transform: `scaleX(${p.total ? p.answered / p.total : 0})` } })),
-    h('b', null, `${p.answered}/${p.total}`))));
 
-  const list = (pred) => S.paper.map((q, i) => (pred(i) ? i : -1)).filter((i) => i > -1);
+  const isOnlySingleCategory = cfg().modules.length <= 1 || (cfg().modules.length === 2 && cfg().modules[1].isBonus);
+  const rvModules = $('rv-modules');
+  if (rvModules) {
+    rvModules.hidden = isOnlySingleCategory;
+    if (!isOnlySingleCategory) {
+      mount(rvModules, moduleProgress().map((p) => h('li', null,
+        h('span', null, `Module ${p.module.letter} · ${p.module.short}`),
+        h('span', { class: 'meter' }, h('i', { style: { transform: `scaleX(${p.total ? p.answered / p.total : 0})` } })),
+        h('b', null, `${p.answered}/${p.total}`))));
+    }
+  }
+
+  const activeLen = S.bonusUnlocked ? S.paper.length : S.paper.filter((item) => !item.isBonus && item.segment !== 'bonus').length || S.paper.length;
+  const list = (pred) => S.paper.slice(0, activeLen).map((q, i) => (pred(i) ? i : -1)).filter((i) => i > -1);
   const chips = (idxs, cls) => (idxs.length
     ? idxs.map((i) => h('button', { type: 'button', class: `chip ${cls}`, onclick: () => onJump(i) }, `Q${pad(S.paper[i].n)}`))
     : [h('span', { class: 'muted' }, 'None')]);
   mount($('rv-unanswered-list'), chips(list((i) => !isAnswered(S.answers[i])), 'chip--slate'));
   mount($('rv-marked-list'), chips(list((i) => S.answers[i].marked), 'chip--amber'));
+
+  const bonusCard = $('rv-bonus-card');
+  if (bonusCard) {
+    if (canUnlockBonus) {
+      bonusCard.hidden = false;
+      setText('rv-bonus-time', remainingTimeText || 'before time');
+      const unlockBtn = $('btn-unlock-bonus');
+      if (unlockBtn && onBonusUnlock) {
+        unlockBtn.onclick = onBonusUnlock;
+      }
+    } else {
+      bonusCard.hidden = true;
+    }
+  }
+
   $('rv-confirm').checked = false;
   $('btn-submit-final').disabled = true;
   show('modal-review', true);

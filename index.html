@@ -373,7 +373,16 @@
       <div class="rv-lists">
         <div><h3>Unanswered</h3><div class="chips" id="rv-unanswered-list"></div></div>
         <div><h3>Marked for review</h3><div class="chips" id="rv-marked-list"></div></div>
+      <div class="card card--bonus" id="rv-bonus-card" hidden style="margin: 1.25rem 0; border: 1px solid var(--accent, #38bdf8); background: rgba(56, 189, 248, 0.08); padding: 1rem; border-radius: 8px;">
+        <h3 style="margin: 0 0 0.5rem 0; color: var(--accent, #38bdf8); display: flex; align-items: center; gap: 0.5rem; font-size: 1rem;">
+          <span>⚡ Early Submission Bonus Unlocked!</span>
+        </h3>
+        <p style="margin: 0 0 0.75rem 0; font-size: 0.9rem; line-height: 1.4; color: var(--fg, #e2e8f0);">
+          You completed the main 40 questions with <b id="rv-bonus-time" style="color: var(--accent, #38bdf8);">--:--</b> remaining! You can attempt the <b>5 Bonus Questions</b> using your remaining time.
+        </p>
+        <button class="btn btn--primary btn--block" id="btn-unlock-bonus" type="button">Proceed to Bonus Questions (5 Qs)</button>
       </div>
+
       <label class="check check--danger">
         <input type="checkbox" id="rv-confirm">
         <span>I understand that submitting seals my paper permanently. I cannot return to it.</span>

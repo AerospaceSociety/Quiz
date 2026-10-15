@@ -17,7 +17,7 @@ import { sha256Hex, canonicalJSON, randomHex } from './util.js';
 const OUTBOX = 'qz.outbox.v2';
 const OUTBOX_SUBMISSION_KEYS = new Set(['v', 'uid', 'sessionId', 'paperId', 'candidate', 'identityKey', 'reason', 'verdict', 'strikes', 'advisories', 'startedAt', 'sealedAt', 'elapsedSec', 'clockSource', 'resumes', 'total', 'answered', 'unanswered', 'marked', 'modules', 'items', 'salt', 'checksum', 'checksumAlgo']);
 const OUTBOX_CANDIDATE_KEYS = new Set(['schoolUid', 'teamId', 'memberId', 'name', 'division', 'schoolName', 'rosterVerified', 'isIndividual', 'consentVersion', 'consentAt']);
-const OUTBOX_ITEM_KEYS = new Set(['n', 'id', 'catId', 'scheme', 'displayed', 'selected', 'original', 'text', 'marked', 'visits', 'seconds']);
+const OUTBOX_ITEM_KEYS = new Set(['n', 'id', 'catId', 'scheme', 'displayed', 'selected', 'original', 'text', 'marked', 'visits', 'seconds', 'isBonus', 'segment']);
 const OUTBOX_MODULE_KEYS = new Set(['id', 'code', 'answered', 'total']);
 const LIVE_EVENTS = new Set(['SIGNED_IN', 'EXAM_STARTED', 'SESSION_RESUMED', 'SUBMITTED', 'CLOCK_ANOMALY']);
 

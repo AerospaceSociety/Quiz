@@ -13,7 +13,8 @@
     "durationSeconds": 2700,
     "warnAtSeconds": 600,
     "criticalAtSeconds": 300,
-    "itemsPerModule": 5,
+    "itemsPerModule": 40,
+    "bonusItems": 5,
     "shuffleQuestions": true,
     "shuffleOptions": true,
     "questionSource": "firestore",
@@ -83,7 +84,7 @@
       "correct": 5,
       "incorrect": -1,
       "multi": false,
-      "note": "Reasoning item \u2014 select exactly one option. Negative marking applies."
+      "note": "Reasoning item — select exactly one option. Negative marking applies."
     },
     "multi": {
       "label": "Multi-Select",
@@ -97,30 +98,17 @@
     {
       "id": 0,
       "letter": "A",
-      "code": "M-A",
-      "short": "Orbital",
-      "name": "Orbital Mechanics & Astrodynamics"
+      "code": "MAIN",
+      "short": "Quiz",
+      "name": "General Examination"
     },
     {
       "id": 1,
       "letter": "B",
-      "code": "M-B",
-      "short": "Habitat",
-      "name": "Space Settlement & Habitat Engineering"
-    },
-    {
-      "id": 2,
-      "letter": "C",
-      "code": "M-C",
-      "short": "Propulsion",
-      "name": "UAV, CFD & Supersonic Propulsion"
-    },
-    {
-      "id": 3,
-      "letter": "D",
-      "code": "M-D",
-      "short": "Deep Space",
-      "name": "Deep Space Exploration & Astrophysics"
+      "code": "BONUS",
+      "short": "Bonus",
+      "name": "Bonus Segment",
+      "isBonus": true
     }
   ],
   "divisions": [

@@ -625,6 +625,9 @@ body[data-stage="exam"].is-shielded .palette__grid { visibility: hidden; }
 /* current: laser-cyan outline + glow */
 .pcell.is-current { outline: 2px solid var(--cyan); outline-offset: 2px; box-shadow: 0 0 12px rgba(34, 195, 230, .55); color: var(--ink); }
 .pcell--answered.is-current, .pcell--marked.is-current, .pcell--answered-marked.is-current { color: #04141A; }
+.pcell--bonus { border-color: rgba(56, 189, 248, 0.6); box-shadow: 0 0 6px rgba(56, 189, 248, 0.2); }
+.pgroup--bonus { border-top: 1px dashed var(--line); padding-top: 10px; margin-top: 8px; }
+.pgroup__label--bonus { color: var(--cyan, #38bdf8); font-weight: 600; font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; }
 
 .palette .legend { margin-top: auto; padding-top: 12px; border-top: 1px solid var(--line); }
 .palette .btn--submit { flex: none; }

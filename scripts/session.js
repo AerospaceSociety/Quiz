@@ -73,6 +73,7 @@ export const S = {
   baseline: null,            // { photo, pose: {yaw, pitch}, noise, capturedAt }
   stillsPurged: false,
   paper: [],                 // frozen question objects for this candidate
+  bonusUnlocked: false,      // unlocked when candidate completes main segment before time
   answers: [],               // [{ sel: number[], marked, visits, timeMs }]
   idx: 0,
   enteredAt: 0,              // performance.now() when the current question was opened
@@ -191,9 +192,10 @@ export function attachThumb(entry, dataUrl) {
 
 /* --- 04 · COUNTS ---------------------------------------------------------- */
 export const isAnswered = (a) => !!a && a.sel.length > 0;
-export const answeredCount = () => S.answers.filter(isAnswered).length;
-export const markedCount = () => S.answers.filter((a) => a.marked).length;
-export const unansweredCount = () => S.answers.length - answeredCount();
+export const activeCount = () => (S.bonusUnlocked ? S.answers.length : (S.paper.filter((q) => !q.isBonus && q.segment !== 'bonus').length || Math.min(40, S.answers.length)));
+export const answeredCount = () => S.answers.slice(0, activeCount()).filter(isAnswered).length;
+export const markedCount = () => S.answers.slice(0, activeCount()).filter((a) => a.marked).length;
+export const unansweredCount = () => activeCount() - answeredCount();
 
 /* --- 05 · CRASH-RECOVERY SNAPSHOT ----------------------------------------- */
 const SNAP_KEY = 'qz.session.v2';
@@ -210,6 +212,7 @@ export function persist() {
       salt: S.salt,
       candidate: S.candidate,
       stage: S.stage,
+      bonusUnlocked: S.bonusUnlocked,
       answers: S.answers,
       idx: S.idx,
       strikes: S.strikes,

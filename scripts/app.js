@@ -285,6 +285,7 @@ function applySnapshot(snap) {
   if (!S.candidate.consentVersion) S.candidate.consentVersion = (settings.security && settings.security.consentVersion) || '2026.1-DPDP-DRAFT';
   if (!S.candidate.consentAt) S.candidate.consentAt = snap.savedAt || Date.now();
   S.strikes = snap.strikes || 0;
+  S.bonusUnlocked = Boolean(snap.bonusUnlocked);
   S.advisories = { ...(snap.advisories || {}) };
   S.ledger = Array.isArray(snap.ledger) ? snap.ledger.slice() : [];
   S.resumes = (snap.resumes || 0) + 1;
@@ -676,7 +677,23 @@ function wire() {
   $('btn-mark').addEventListener('click', engine.toggleMark);
   $('btn-review-submit').addEventListener('click', () => {
     engine.commitDwell();
-    view.openReview((i) => { view.closeReview(); engine.go(i); });
+    const remainingSec = clock ? clock.remaining() : (S.examEndAt ? Math.max(0, Math.round((S.examEndAt - now()) / 1000)) : 0);
+    const hasBonusQuestions = engine.hasBonus();
+    const canUnlockBonus = !S.bonusUnlocked && hasBonusQuestions && remainingSec > 0;
+    const mins = Math.floor(remainingSec / 60);
+    const secs = remainingSec % 60;
+    const remainingTimeText = `${mins}:${secs < 10 ? '0' : ''}${secs}`;
+
+    view.openReview(
+      (i) => { view.closeReview(); engine.go(i); },
+      () => {
+        view.closeReview();
+        engine.unlockBonus();
+        toast('Bonus segment unlocked!', 'You can now attempt the 5 bonus questions with your remaining time.', 'ok', 5000);
+      },
+      canUnlockBonus,
+      remainingTimeText
+    );
   });
   $('btn-review-return').addEventListener('click', view.closeReview);
   $('rv-confirm').addEventListener('change', (e) => { $('btn-submit-final').disabled = !e.target.checked; });

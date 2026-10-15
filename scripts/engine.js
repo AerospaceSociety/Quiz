@@ -61,7 +61,8 @@ export function buildPaper(bank, seedKey, division) {
   s.modules.forEach((m) => {
     let inModule = pool.filter((q) => q.catId === m.id);
     if (s.exam.shuffleQuestions) inModule = shuffle(inModule, rng);
-    if (s.exam.itemsPerModule > 0) inModule = inModule.slice(0, s.exam.itemsPerModule);
+    const count = m.isBonus ? (s.exam.bonusItems || 5) : (s.exam.itemsPerModule || 40);
+    if (count > 0) inModule = inModule.slice(0, count);
     inModule.forEach((q) => {
       let order = q.options.map((_, i) => i);
       if (s.exam.shuffleOptions) order = shuffle(order, rng);
@@ -70,6 +71,8 @@ export function buildPaper(bank, seedKey, division) {
         id: q.id,
         catId: q.catId,
         scheme: q.scheme,
+        isBonus: Boolean(m.isBonus || q.isBonus),
+        segment: m.isBonus ? 'bonus' : 'main',
         question: q.question,
         supplement: q.supplement,
         options: order.map((i) => q.options[i]),
@@ -130,8 +133,31 @@ export function commitDwell() {
   S.enteredAt = t;
 }
 
+export function mainCount() {
+  const nonBonus = S.paper.filter((q) => !q.isBonus && q.segment !== 'bonus');
+  return nonBonus.length || Math.min(40, S.paper.length);
+}
+
+export const hasBonus = () => S.paper.some((q) => q.isBonus || q.segment === 'bonus');
+export const activePaperLength = () => (S.bonusUnlocked ? S.paper.length : mainCount());
+
+export function unlockBonus() {
+  if (S.bonusUnlocked) return;
+  S.bonusUnlocked = true;
+  const firstBonusIdx = mainCount();
+  recordIncident({
+    type: 'BONUS_UNLOCKED',
+    level: Level.INFO,
+    message: `Bonus segment unlocked (${Math.max(0, S.paper.length - firstBonusIdx)} questions)`
+  });
+  persist();
+  bus.emit(EV.ANSWERS);
+  go(firstBonusIdx);
+}
+
 export function go(i) {
-  if (!live() || i < 0 || i >= S.paper.length) return;
+  const maxIdx = activePaperLength() - 1;
+  if (!live() || i < 0 || i > maxIdx) return;
   commitDwell();
   S.idx = i;
   S.answers[i].visits += 1;
@@ -140,12 +166,12 @@ export function go(i) {
   persist();
 }
 
-export const next = () => go(Math.min(S.idx + 1, S.paper.length - 1));
+export const next = () => go(Math.min(S.idx + 1, activePaperLength() - 1));
 export const prev = () => go(Math.max(S.idx - 1, 0));
 
 export function goModule(catId) {
   const i = S.paper.findIndex((q) => q.catId === catId);
-  if (i > -1) go(i);
+  if (i > -1 && i < activePaperLength()) go(i);
 }
 
 /* --- 04 · RESPONSES ------------------------------------------------------- */

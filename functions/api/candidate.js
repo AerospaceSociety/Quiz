@@ -346,16 +346,19 @@ function shuffle(values) {
 
 async function buildExpectedPaper(env, division) {
   const bank = await listDocuments(env, 'quizzitch_questions');
-  const modules = String(env.QUIZ_MODULE_IDS || '0,1,2,3').split(',').map((value) => Number(value.trim()));
+  const modules = String(env.QUIZ_MODULE_IDS || '0,1').split(',').map((value) => Number(value.trim()));
   if (!modules.length || modules.length > 20 || modules.some((moduleId) => !Number.isSafeInteger(moduleId) || moduleId < 0) || new Set(modules).size !== modules.length) {
     throw new HttpError(503, 'Quiz module configuration is invalid');
   }
-  const configuredItems = Number(env.QUIZ_ITEMS_PER_MODULE || 5);
+  const configuredItems = Number(env.QUIZ_ITEMS_PER_MODULE || 40);
+  const bonusItemsCount = Number(env.QUIZ_BONUS_ITEMS || 5);
   if (!Number.isSafeInteger(configuredItems) || configuredItems < 1 || configuredItems > 200) {
     throw new HttpError(503, 'Quiz paper-size configuration is invalid');
   }
   if (!bank.length || bank.length > 1000) throw new HttpError(503, 'Question bank size is invalid');
   const moduleSet = new Set(modules);
+  moduleSet.add(0);
+  moduleSet.add(1);
   const schemes = new Set(['standard', 'highstakes', 'multi']);
   const normalizedBank = bank.map((entry) => {
     const question = entry.data;
@@ -374,18 +377,34 @@ async function buildExpectedPaper(env, division) {
     }
     return question;
   });
-  const expected = [];
-  for (const moduleId of modules) {
-    let pool = normalizedBank
-      .filter((question) => question.catId === moduleId && (!question.divisions || question.divisions.includes(division)))
-      .sort((left, right) => String(left.id) < String(right.id) ? -1 : String(left.id) > String(right.id) ? 1 : 0);
-    if (env.QUIZ_SHUFFLE_QUESTIONS !== 'false') pool = shuffle(pool);
-    pool = pool.slice(0, configuredItems);
-    for (const question of pool) {
-      const options = Array.isArray(question.options) ? question.options : [];
-      const order = env.QUIZ_SHUFFLE_OPTIONS === 'false' ? options.map((_, index) => index) : shuffle(options.map((_, index) => index));
-      expected.push({ question, order });
+
+  const isBonusQuestion = (q) => q.catId === 1 || q.bonus === true || q.segment === 'bonus' || q.isBonus === true;
+  let bonusPool = normalizedBank.filter((q) => isBonusQuestion(q) && (!q.divisions || q.divisions.includes(division)));
+  let mainPool = normalizedBank.filter((q) => !isBonusQuestion(q) && (!q.divisions || q.divisions.includes(division)));
+
+  if (!bonusPool.length && mainPool.length > configuredItems) {
+    if (env.QUIZ_SHUFFLE_QUESTIONS !== 'false') mainPool = shuffle(mainPool);
+    bonusPool = mainPool.slice(configuredItems, configuredItems + bonusItemsCount);
+    mainPool = mainPool.slice(0, configuredItems);
+  } else {
+    if (env.QUIZ_SHUFFLE_QUESTIONS !== 'false') {
+      mainPool = shuffle(mainPool);
+      bonusPool = shuffle(bonusPool);
     }
+    mainPool = mainPool.slice(0, configuredItems);
+    bonusPool = bonusPool.slice(0, bonusItemsCount);
+  }
+
+  const expected = [];
+  for (const question of mainPool) {
+    const options = Array.isArray(question.options) ? question.options : [];
+    const order = env.QUIZ_SHUFFLE_OPTIONS === 'false' ? options.map((_, index) => index) : shuffle(options.map((_, index) => index));
+    expected.push({ question: { ...question, isBonus: false, segment: 'main' }, order });
+  }
+  for (const question of bonusPool) {
+    const options = Array.isArray(question.options) ? question.options : [];
+    const order = env.QUIZ_SHUFFLE_OPTIONS === 'false' ? options.map((_, index) => index) : shuffle(options.map((_, index) => index));
+    expected.push({ question: { ...question, isBonus: true, segment: 'bonus' }, order });
   }
   return expected;
 }
@@ -399,7 +418,7 @@ function validatePaper(submission, manifest) {
     order: item.order
   }));
   const legacy = submission.v === 2;
-  const itemKeys = new Set(['n', 'id', 'catId', 'scheme', 'displayed', ...(legacy ? ['original'] : ['selected']), 'text', 'marked', 'visits', 'seconds']);
+  const itemKeys = new Set(['n', 'id', 'catId', 'scheme', 'displayed', ...(legacy ? ['original'] : ['selected']), 'text', 'marked', 'visits', 'seconds', 'isBonus', 'segment']);
   for (let index = 0; index < expected.length; index++) {
     const item = submission.items[index];
     if (!hasOnlyKeys(item, itemKeys)) throw new HttpError(422, 'Answer item contains invalid fields');
@@ -556,6 +575,8 @@ async function paper(env, uid) {
     n: index + 1,
     catId: Number(question.catId),
     scheme: question.scheme || 'standard',
+    isBonus: Boolean(question.isBonus),
+    segment: question.segment || (question.isBonus ? 'bonus' : 'main'),
     question: String(question.question || ''),
     supplement: typeof question.supplement === 'string' ? question.supplement : '',
     options: order.map((optionIndex) => question.options[optionIndex]),
