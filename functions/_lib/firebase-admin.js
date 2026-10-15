@@ -142,7 +142,7 @@ async function signingCertificate(kid, forceRefresh = false) {
   if (forceRefresh || !certificateCache || Date.now() >= certificateExpiry) {
     if (!certificateFetch) {
       certificateFetch = (async () => {
-        const response = await fetch(FIREBASE_CERTS_URL, { redirect: 'error', signal: AbortSignal.timeout(10000) });
+        const response = await fetch(FIREBASE_CERTS_URL, { redirect: 'manual', signal: AbortSignal.timeout(10000) });
         if (!response.ok) throw new HttpError(503, 'Firebase signing certificates are unavailable');
         const certificates = await response.json();
         const maxAgeMatch = /max-age=(\d+)/i.exec(response.headers.get('Cache-Control') || '');
@@ -222,7 +222,7 @@ async function serviceToken(env) {
   const assertion = `${signingInput}.${base64url(new Uint8Array(signature))}`;
   const response = await fetch(TOKEN_URL, {
     method: 'POST',
-    redirect: 'error',
+    redirect: 'manual',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
     body: new URLSearchParams({ grant_type: 'urn:ietf:params:oauth:grant-type:jwt-bearer', assertion }),
     signal: AbortSignal.timeout(15000)
@@ -275,7 +275,7 @@ async function firestoreRequest(env, path, init = {}) {
   const { token, projectId } = await serviceToken(env);
   const response = await fetch(documentPath(projectId, path), {
     ...init,
-    redirect: 'error',
+    redirect: 'manual',
     signal: init.signal || AbortSignal.timeout(15000),
     headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json', ...(init.headers || {}) }
   });
@@ -301,7 +301,7 @@ export async function listDocuments(env, collection) {
     const url = new URL(documentPath(projectId, collection));
     url.searchParams.set('pageSize', '1000');
     if (pageToken) url.searchParams.set('pageToken', pageToken);
-    const response = await fetch(url, { headers: { Authorization: `Bearer ${token}` }, redirect: 'error', signal: AbortSignal.timeout(15000) });
+    const response = await fetch(url, { headers: { Authorization: `Bearer ${token}` }, redirect: 'manual', signal: AbortSignal.timeout(15000) });
     const body = await response.json().catch(() => ({}));
     if (!response.ok) throw new HttpError(502, body.error && body.error.message || 'Firestore query failed');
     for (const doc of body.documents || []) {
@@ -317,7 +317,7 @@ export async function commitWrites(env, writes) {
   const { token, projectId } = await serviceToken(env);
   const response = await fetch(`https://firestore.googleapis.com/v1/projects/${encodeURIComponent(projectId)}/databases/(default)/documents:commit`, {
     method: 'POST',
-    redirect: 'error',
+    redirect: 'manual',
     headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
     body: JSON.stringify({ writes: writes.map((write) => {
       const path = write.path.split('/').map(encodeURIComponent).join('/');

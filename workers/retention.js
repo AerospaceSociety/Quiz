@@ -2,7 +2,7 @@ export default {
   async scheduled(_controller, env) {
     const response = await fetch(env.RETENTION_ENDPOINT, {
       method: 'POST',
-      redirect: 'error',
+      redirect: 'manual',
       headers: { Authorization: `Bearer ${env.RETENTION_PURGE_TOKEN}` },
       signal: AbortSignal.timeout(30000)
     });

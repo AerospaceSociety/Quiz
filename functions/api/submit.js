@@ -103,7 +103,7 @@ export async function onRequestPost({ request, env }) {
 
     try {
       const questionsResponse = await fetch(`${apiBase}/form/${encodeURIComponent(formId)}/questions`, {
-        headers: { APIKEY: apiKey }, redirect: 'error', signal: AbortSignal.timeout(15000)
+        headers: { APIKEY: apiKey }, redirect: 'manual', signal: AbortSignal.timeout(15000)
       });
       if (!questionsResponse.ok) throw new Error('Failed to fetch Jotform field definitions');
       const questionData = await questionsResponse.json();
@@ -138,7 +138,7 @@ export async function onRequestPost({ request, env }) {
       postAttempted = true;
       const postResponse = await fetch(`${apiBase}/form/${encodeURIComponent(formId)}/submissions`, {
         method: 'POST',
-        redirect: 'error',
+        redirect: 'manual',
         headers: { 'Content-Type': 'application/x-www-form-urlencoded', APIKEY: apiKey },
         body: form.toString(),
         signal: AbortSignal.timeout(15000)
