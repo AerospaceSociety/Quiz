@@ -367,7 +367,7 @@ async function buildExpectedPaper(env, division) {
     if (!Number.isSafeInteger(catId) || catId < 0) {
       catId = 0;
     }
-    const isBonus = question?.isBonus === true || question?.bonus === true || question?.segment === 'bonus' || catId === 1;
+    const isBonus = question?.isBonus === true || question?.isbonus === true || question?.bonus === true || question?.segment === 'bonus' || catId === 1;
     if (modules.length <= 2) {
       catId = isBonus ? 1 : 0;
     }
@@ -386,7 +386,7 @@ async function buildExpectedPaper(env, division) {
     return { ...question, catId, isBonus };
   });
 
-  const isBonusQuestion = (q) => q.catId === 1 || q.bonus === true || q.segment === 'bonus' || q.isBonus === true;
+  const isBonusQuestion = (q) => q.catId === 1 || q.bonus === true || q.segment === 'bonus' || q.isBonus === true || q.isbonus === true;
   let bonusPool = normalizedBank.filter((q) => isBonusQuestion(q) && (!q.divisions || q.divisions.includes(division)));
   let mainPool = normalizedBank.filter((q) => !isBonusQuestion(q) && (!q.divisions || q.divisions.includes(division)));
 

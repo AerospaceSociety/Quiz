@@ -597,7 +597,7 @@ function validateQuestionBank(data) {
     if (!question || typeof question !== 'object' || Array.isArray(question)) throw new Error(`Question ${index + 1} must be an object.`);
     const id = String(question.id ?? '').trim();
     const rawCat = Number(question.catId);
-    const isBonus = question.isBonus === true || question.bonus === true || question.segment === 'bonus';
+    const isBonus = question.isBonus === true || question.isbonus === true || question.bonus === true || question.segment === 'bonus';
     let catId = rawCat;
     if (isBonus && bonusModule) {
       catId = bonusModule.id;
@@ -660,7 +660,11 @@ async function onSeedFile() {
       renderResults();
     }
   } catch (err) {
-    setText('seed-status', `Failed: ${err.message}`);
+    const isPermission = /permission/i.test(err.message) || err.code === 'permission-denied';
+    const msg = isPermission
+      ? `Permission denied. Verify that your account has an admins/{uid} document in Firestore, firestore.rules are published, and your session was not switched to anonymous by another open tab.`
+      : err.message;
+    setText('seed-status', `Failed: ${msg}`);
   }
 }
 

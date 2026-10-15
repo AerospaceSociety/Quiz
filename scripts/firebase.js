@@ -426,6 +426,9 @@ export async function extendControl(seconds) {
 
 export async function seedQuestions(questions) {
   if (!ready) throw new Error('Firebase is not configured.');
+  if (!auth.currentUser || auth.currentUser.isAnonymous) {
+    throw new Error('Not authenticated as an invigilator. If you opened the candidate portal in another tab, your session became anonymous. Please sign out and sign in again.');
+  }
   if (!Array.isArray(questions) || !questions.length || questions.length > 1000) throw new Error('Question bank must contain 1–1,000 questions.');
   const safeQuestions = questions.map((question) => {
     const id = String(question?.id ?? '').trim();
@@ -506,6 +509,9 @@ async function assertAnswerKeyMatchesBank(key) {
 
 export async function saveAnswerKey(key) {
   if (!ready) throw new Error('Firebase is not configured.');
+  if (!auth.currentUser || auth.currentUser.isAnonymous) {
+    throw new Error('Not authenticated as an invigilator. If you opened the candidate portal in another tab, your session became anonymous. Please sign out and sign in again.');
+  }
   const control = await fs.getDoc(d('exam_control', 'status'));
   if (control.exists() && control.get('status') === 'active') throw new Error('The answer key cannot be changed while a paper is active.');
   const submissions = await fs.getDocs(fs.collection(db, 'submissions'));
