@@ -66,7 +66,8 @@ async function stillsPurgeState(env, startedAt) {
   };
 }
 
-function cleanSession(data, uid, identityKey, previous = {}) {
+function cleanSession(data, uid, identityKey, prev = {}) {
+  const previous = prev || {};
   if (!data || typeof data !== 'object') throw new HttpError(400, 'Session state is required');
   const stages = new Set(['signin', 'calibrate', 'protocol', 'exam']);
   const statuses = new Set(['secure', 'warning', 'flagged']);
@@ -218,7 +219,7 @@ async function session(env, uid, payload) {
   const previous = await getDocument(env, `sessions/${uid}`);
   if (previous && previous.data.status === 'submitted') throw new HttpError(409, 'Submitted sessions are immutable');
   if (previous && previous.data.identityKey !== identityKey) throw new HttpError(409, 'This account is already attached to another candidate session');
-  const data = cleanSession(payload.data, uid, identityKey, previous && previous.data);
+  const data = cleanSession(payload.data, uid, identityKey, previous?.data || {});
   if (data.stage === 'sealed') throw new HttpError(400, 'Only the seal endpoint may submit a session');
   const control = await getDocument(env, 'exam_control/status');
   if (data.stage === 'exam') {
