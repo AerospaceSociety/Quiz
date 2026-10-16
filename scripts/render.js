@@ -163,8 +163,9 @@ export function calibError(message) {
 /* --- 06 · STAGE 3 · PROTOCOL ---------------------------------------------- */
 export function buildProtocol() {
   const s = cfg();
-  const count = s.exam.itemsPerModule > 0 ? s.exam.itemsPerModule * s.modules.length : null;
-  setText('paper-summary', `${Math.round(s.exam.durationSeconds / 60)} minutes · ${count ? `${count} questions` : 'full bank'} · ${s.modules.length} modules`);
+  const mainCount = s.exam.itemsPerModule || 40;
+  const bonusCount = s.exam.bonusItems || 5;
+  setText('paper-summary', `${Math.round(s.exam.durationSeconds / 60)} minutes · ${mainCount} questions + ${bonusCount} bonus questions · ${s.modules.length} modules`);
   setText('protocol-scratch-note', 'Scratch paper is allowed — keep your face visible in frame.');
   document.querySelectorAll('[data-cfg]').forEach((n) => {
     const v = n.dataset.cfg.split('.').reduce((o, k) => (o ? o[k] : undefined), s);
@@ -494,14 +495,28 @@ export function paintDispatch(d) {
   };
   const fbNode = $('dp-firebase');
   const jfNode = $('dp-jotform');
+  const queuedNotice = $('rc-queued-notice');
   if (fbNode) {
     fbNode.textContent = label[d.firebase] || d.firebase;
     fbNode.dataset.state = d.firebase === 'recorded' ? 'pass' : d.firebase === 'queued' || d.firebase === 'sending' ? 'busy' : 'fail';
+  }
+  if (queuedNotice) {
+    queuedNotice.hidden = (d.firebase === 'recorded');
   }
   if (jfNode) {
     jfNode.textContent = label[d.jotform] || d.jotform;
     jfNode.dataset.state = d.jotform === 'dispatched' ? 'pass' : d.jotform === 'sending' ? 'busy' : d.jotform === 'disabled' ? 'idle' : d.firebase === 'recorded' ? 'idle' : 'fail';
   }
+  const jfReady = !cfg().jotform?.enabled || d.jotform === 'dispatched' || d.jotform === 'disabled';
+  const fbReady = d.firebase === 'recorded';
+  const readyToDownload = fbReady && jfReady;
+
+  const btnPrint = $('btn-print');
+  const btnDownload = $('btn-download-record');
+  const lockNotice = $('rc-download-lock-notice');
+  if (btnPrint) btnPrint.disabled = !readyToDownload;
+  if (btnDownload) btnDownload.disabled = !readyToDownload;
+  if (lockNotice) lockNotice.hidden = readyToDownload;
 }
 
 export function paintSubmitting(step, detail) {
@@ -518,6 +533,15 @@ export function paintSubmitting(step, detail) {
       s3.classList.add('is-active');
       const b = s3.querySelector('.submitting-step__badge');
       if (b) { b.className = 'submitting-step__badge submitting-step__badge--spin'; b.textContent = ''; }
+      if (detail) setText('sub-step-3-text', detail);
+    }
+  } else if (step === 3) {
+    const s3 = $('sub-step-3');
+    if (s3) {
+      s3.classList.add('is-complete');
+      s3.classList.remove('is-active');
+      const b = s3.querySelector('.submitting-step__badge');
+      if (b) { b.className = 'submitting-step__badge'; b.textContent = '✓'; }
       if (detail) setText('sub-step-3-text', detail);
     }
   }

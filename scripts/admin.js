@@ -852,6 +852,38 @@ async function releaseLock(query, statusId) {
   }
 }
 
+async function onImportSubFile() {
+  const fileInput = $('file-import-sub');
+  try {
+    const data = await readJSONFile(fileInput);
+    if (!data) return;
+    let sub = data.submission || (data.package && data.package.submission) || data;
+    let fx = data.forensics || (data.package && data.package.forensics) || null;
+    if (!sub || typeof sub !== 'object' || !sub.checksum || !sub.salt) {
+      throw new Error('Invalid submission format. The uploaded file must contain a sealed submission with checksum and salt.');
+    }
+    const uid = sub.uid || sub.id;
+    if (!uid) throw new Error('Missing candidate UID in the submission payload.');
+
+    setText('import-sub-status', 'Verifying cryptographic SHA-256 checksum…');
+    const valid = await verifyChecksum(sub);
+    if (!valid) {
+      throw new Error('CRYPTOGRAPHIC CHECKSUM MISMATCH. The payload differs from what was sealed and cannot be verified.');
+    }
+    const cand = sub.candidate || {};
+    if (!confirm(`Import and seal verified submission for ${cand.name || 'Candidate'} (${cand.schoolUid || ''} · ${cand.teamId || ''})?\nChecksum: ${sub.checksum}\nChecksum verified: YES.`)) {
+      setText('import-sub-status', 'Import cancelled.');
+      return;
+    }
+    await fb.recordAdminSubmission(sub, fx);
+    setText('import-sub-status', `Successfully imported and sealed submission for ${cand.name || uid} (checksum verified).`);
+    toast('Submission recorded', `${cand.name || uid} marked as submitted`, 'ok');
+  } catch (err) {
+    setText('import-sub-status', `Failed: ${err.message}`);
+    toast('Import failed', err.message, 'danger');
+  }
+}
+
 async function onPurgeStills() {
   if (!confirm('Permanently purge stored baseline photos and incident thumbnails, clear stills held by connected candidate pages, and prevent this event from storing new stills? Candidate answers and event text remain. Exported, photographed, or OS/browser-backup copies cannot be recalled.')) return;
   setText('purge-status', 'Purging forensic stills…');
@@ -983,6 +1015,7 @@ function wire() {
   $('file-questions').addEventListener('change', onSeedFile);
   $('file-key').addEventListener('change', onKeyFile);
   $('file-roster').addEventListener('change', onRosterFile);
+  $('file-import-sub').addEventListener('change', onImportSubFile);
   $('btn-release').addEventListener('click', () => releaseLock($('in-identity').value.trim(), 'release-status'));
   $('btn-purge-stills').addEventListener('click', onPurgeStills);
 

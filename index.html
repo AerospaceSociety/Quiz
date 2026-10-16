@@ -367,8 +367,20 @@
           <li><span>Jotform response mirror</span><b id="dp-jotform" data-state="idle">—</b></li>
         </ul>
 
-        <button class="btn btn--primary btn--lg" id="btn-print" type="button">Print / Save PDF Receipt</button>
-        <p class="note">Keep this receipt. The checksum lets the AEROSS panel prove your stored responses were not altered after sealing. You may now close this window.</p>
+        <div id="rc-queued-notice" class="toast toast--warn" hidden style="margin-top: 1rem; width: 100%;">
+          <strong>Transmitting to database…</strong> Keep this tab open while your sealed responses are automatically transmitted to the examination server.
+          <div style="margin-top: 0.5rem;"><button class="btn btn--sm btn--primary" id="btn-retry-sync" type="button">Retry Transmission Now</button></div>
+        </div>
+
+        <div id="rc-download-lock-notice" class="toast toast--warn" hidden style="margin-top: 1rem; width: 100%;">
+          <strong>Verification in progress:</strong> Official receipt printing and proof downloads are locked until your responses are confirmed in the examination database and mirror.
+        </div>
+
+        <div class="btn-row" style="margin-top: 1rem; display: flex; gap: 0.75rem; flex-wrap: wrap;">
+          <button class="btn btn--primary btn--lg" id="btn-print" type="button" disabled>Print / Save PDF Receipt</button>
+          <button class="btn btn--ghost btn--lg" id="btn-download-record" type="button" disabled>Download Encrypted Proof (.json)</button>
+        </div>
+        <p class="note">Keep this receipt. The checksum lets the AEROSS panel prove your stored responses were not altered after sealing. You may now close this window once the database status shows Recorded.</p>
       </section>
     </div>
   </main>

@@ -53,18 +53,18 @@
     "visionBundleUrl": "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/vision_bundle.mjs",
     "wasmBaseUrl": "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/wasm",
     "modelUrl": "https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task",
-    "absenceSeconds": 6,
-    "consecutiveMissedFramesForAbsence": 3,
+    "absenceSeconds": 4,
+    "consecutiveMissedFramesForAbsence": 2,
     "multiFaceSeconds": 1.5,
-    "yawLimitDeg": 35,
-    "pitchDownLimitDeg": 30,
-    "gazeSustainSeconds": 6,
+    "yawLimitDeg": 25,
+    "pitchDownLimitDeg": 18,
+    "gazeSustainSeconds": 3.5,
     "freezeSeconds": 5,
     "freezeDiffEpsilon": 0.12,
     "lumaMin": 45,
     "lumaMax": 215,
     "contrastMin": 14,
-    "flagCooldownSeconds": 20,
+    "flagCooldownSeconds": 15,
     "incidentThumbs": 12,
     "virtualCameraPattern": "obs|virtual|manycam|snap camera|xsplit|droidcam|epoccam|ndi|camtwist|vcam|iriun"
   },
@@ -75,21 +75,21 @@
   "schemes": {
     "standard": {
       "label": "Single Choice",
-      "correct": 5,
+      "correct": 3,
       "incorrect": -1,
       "multi": false,
       "note": "Select exactly one option."
     },
     "highstakes": {
       "label": "Reasoning",
-      "correct": 5,
+      "correct": 3,
       "incorrect": -1,
       "multi": false,
       "note": "Reasoning item — select exactly one option. Negative marking applies."
     },
     "multi": {
       "label": "Multi-Select",
-      "correct": 5,
+      "correct": 3,
       "incorrect": 0,
       "multi": true,
       "note": "Select every correct option. Full marks only for an exact match; no negative marking."

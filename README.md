@@ -196,7 +196,7 @@ and [Jotform API limits](https://www.jotform.com/help/406-daily-api-call-limits/
 | `security` | `maxStrikes` 3, `advisoriesPerStrike` 3, `fullscreenGraceSeconds` 10, `devtoolsTripwire`, `requireFullscreen` |
 | `proctoring` | `inferenceIntervalMs` 400 (2.5 FPS), `frameWidth/Height` 320×240, `delegate` `CPU`, all thresholds, CDN URLs, `allowDegradedMode` |
 | `telemetry` | `heartbeatSeconds` 60, `advisoryRateLimitSeconds` 60 |
-| `schemes` | `standard` / `highstakes` (shown as *Reasoning*): +5 / −1 · `multi`: +5 / 0, exact match only · blank: 0 |
+| `schemes` | `standard` / `highstakes` (shown as *Reasoning*): +3 / −1 · `multi`: +3 / 0, exact match only · blank: 0 |
 | `modules`, `divisions`, `registry` | module letters/names; IPD/THT with team size & seeds; ID regexes |
 | `jotform` | see §7 |
 

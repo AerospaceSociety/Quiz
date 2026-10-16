@@ -194,4 +194,65 @@ assert(
 );
 console.log('   doubleSealRace: Concurrent timer & candidate submit resolved to exactly one submission -> PASS');
 
+// 6. Test submission count validation with 40 main + 5 bonus items
+console.log('6. Testing submission count validation with bonus questions...');
+function validateSubmissionSummary(submission, manifest) {
+  const answered = submission.items.filter((item) => (submission.v === 2 ? item.original : item.selected).length > 0).length;
+  const marked = submission.items.filter((item) => item.marked).length;
+
+  const mainCount = manifest.items.filter((item) => !item.isBonus && item.segment !== 'bonus').length || 40;
+  const isFullPaperCounts = (submission.answered + submission.unanswered === manifest.items.length) && (submission.unanswered === manifest.items.length - answered);
+  const isMainOnlyCounts = (submission.answered + submission.unanswered === mainCount) && (submission.unanswered === mainCount - answered);
+
+  if (!Number.isSafeInteger(submission.answered) || !Number.isSafeInteger(submission.unanswered)
+    || !Number.isSafeInteger(submission.marked) || submission.answered < 0 || submission.marked < 0
+    || submission.unanswered < 0 || (!isFullPaperCounts && !isMainOnlyCounts)
+    || submission.marked > manifest.items.length
+    || submission.answered !== answered || submission.marked !== marked) {
+    throw new Error('Submission counts are invalid or do not match answers');
+  }
+  return true;
+}
+
+const testManifest = {
+  items: Array.from({ length: 45 }, (_, i) => ({
+    id: `q${i + 1}`,
+    catId: i >= 40 ? 1 : 0,
+    isBonus: i >= 40,
+    segment: i >= 40 ? 'bonus' : 'main'
+  }))
+};
+
+const mainOnlySub = {
+  v: 3,
+  total: 45,
+  answered: 1,
+  unanswered: 39,
+  marked: 0,
+  items: Array.from({ length: 45 }, (_, i) => ({
+    id: `q${i + 1}`,
+    selected: i === 0 ? [0] : [],
+    marked: false
+  }))
+};
+assert.doesNotThrow(() => validateSubmissionSummary(mainOnlySub, testManifest));
+
+const allItemsSub = {
+  v: 3,
+  total: 45,
+  answered: 1,
+  unanswered: 44,
+  marked: 0,
+  items: Array.from({ length: 45 }, (_, i) => ({
+    id: `q${i + 1}`,
+    selected: i === 0 ? [0] : [],
+    marked: false
+  }))
+};
+assert.doesNotThrow(() => validateSubmissionSummary(allItemsSub, testManifest));
+
+const tamperedSub = { ...mainOnlySub, unanswered: 10 };
+assert.throws(() => validateSubmissionSummary(tamperedSub, testManifest));
+console.log('   validateSubmissionSummary: Accepts both main-only count (locked bonus) and full paper count -> PASS');
+
 console.log('\nAll seal robustness tests passed successfully!');

@@ -489,14 +489,19 @@ function validatePaper(submission, manifest) {
 }
 
 function validateSubmissionSummary(submission, manifest) {
-  if (!Number.isSafeInteger(submission.answered) || !Number.isSafeInteger(submission.unanswered)
-    || !Number.isSafeInteger(submission.marked) || submission.answered < 0 || submission.marked < 0
-    || submission.unanswered < 0 || submission.answered + submission.unanswered !== manifest.items.length
-    || submission.marked > manifest.items.length) throw new HttpError(422, 'Submission counts are invalid');
   const answered = submission.items.filter((item) => (submission.v === 2 ? item.original : item.selected).length > 0).length;
   const marked = submission.items.filter((item) => item.marked).length;
-  if (submission.answered !== answered || submission.unanswered !== manifest.items.length - answered || submission.marked !== marked) {
-    throw new HttpError(422, 'Submission counts do not match its answers');
+
+  const mainCount = manifest.items.filter((item) => !item.isBonus && item.segment !== 'bonus').length || 40;
+  const isFullPaperCounts = (submission.answered + submission.unanswered === manifest.items.length) && (submission.unanswered === manifest.items.length - answered);
+  const isMainOnlyCounts = (submission.answered + submission.unanswered === mainCount) && (submission.unanswered === mainCount - answered);
+
+  if (!Number.isSafeInteger(submission.answered) || !Number.isSafeInteger(submission.unanswered)
+    || !Number.isSafeInteger(submission.marked) || submission.answered < 0 || submission.marked < 0
+    || submission.unanswered < 0 || (!isFullPaperCounts && !isMainOnlyCounts)
+    || submission.marked > manifest.items.length
+    || submission.answered !== answered || submission.marked !== marked) {
+    throw new HttpError(422, 'Submission counts are invalid or do not match answers');
   }
   const expected = new Map();
   submission.items.forEach((item) => {
@@ -710,7 +715,8 @@ async function seal(env, uid, payload) {
   const started = control && control.data.startedAt;
   const withinWindow = control && control.data.status === 'active' && started && currentTime <= end + 2 * 60 * 1000;
   const forceEndedGrace = control && control.data.status === 'ended' && control.data.updatedAt && currentTime <= control.data.updatedAt + 2 * 60 * 1000;
-  if (!withinWindow && !forceEndedGrace) throw new HttpError(403, 'The submission window has closed');
+  const sealedInWindow = started && sub.sealedAt >= started && (!end || sub.sealedAt <= end + 120 * 1000);
+  if (!withinWindow && !forceEndedGrace && !sealedInWindow) throw new HttpError(403, 'The submission window has closed');
   if (!control || !control.data.paperId) throw new HttpError(403, 'No released paper is configured');
   if (sess.data.paperId !== control.data.paperId) throw new HttpError(403, 'Assigned paper differs from the released paper');
   const purgeState = await stillsPurgeState(env, control.data.startedAt);

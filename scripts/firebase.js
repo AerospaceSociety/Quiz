@@ -654,3 +654,48 @@ export async function uploadRoster(entries) {
   }
   return n;
 }
+
+export async function recordAdminSubmission(sub, forensics) {
+  if (!ready) throw new Error('Firebase is not configured.');
+  const uid = sub.uid || sub.id;
+  if (!uid) throw new Error('Missing candidate UID in submission record');
+  const batch = fs.writeBatch(db);
+  batch.set(d('submissions', uid), {
+    ...sub,
+    uid,
+    receivedAt: sub.receivedAt || ts(),
+    updatedAt: ts()
+  });
+  const total = Number(sub.total) || 45;
+  const answered = Number(sub.serverAnswered ?? sub.answered) || 0;
+  const strikes = Number(sub.clientReportedStrikes ?? sub.strikes) || 0;
+  const advisories = typeof sub.advisories === 'object' && sub.advisories
+    ? Object.values(sub.advisories).reduce((a, b) => Number(a) + Number(b), 0)
+    : 0;
+  batch.set(d('sessions', uid), {
+    stage: 'sealed',
+    status: 'submitted',
+    checksum: sub.checksum,
+    sessionId: sub.sessionId || '',
+    schoolUid: sub.candidate?.schoolUid || '',
+    teamId: sub.candidate?.teamId || '',
+    name: sub.candidate?.name || '',
+    division: sub.candidate?.division || '',
+    answered,
+    total,
+    strikes,
+    advisories,
+    identityKey: sub.identityKey || '',
+    heartbeatAt: ts()
+  }, { merge: true });
+  if (sub.identityKey) {
+    batch.set(d('identities', sub.identityKey), { state: 'sealed', updatedAt: ts() }, { merge: true });
+    batch.delete(d('candidate_papers', uid));
+  }
+  if (forensics) {
+    batch.set(d('forensics', uid), { ...forensics, updatedAt: ts() }, { merge: true });
+  }
+  trackOp('write', 'submissions');
+  trackOp('write', 'sessions');
+  await batch.commit();
+}

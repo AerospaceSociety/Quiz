@@ -267,7 +267,21 @@ function sample(ts) {
           } else {
             pose = null;
           }
+        let metrics = null;
+        if (lms[0] && lms[0].length >= 153) {
+          const p10 = lms[0][10];   // forehead
+          const p152 = lms[0][152]; // chin
+          const p1 = lms[0][1];     // nose tip
+          const dy = p152.y - p10.y;
+          const dz = p152.z - p10.z;
+          const landmarkPitch = Math.atan2(dz, Math.max(0.01, dy)) * RAD;
+          const noseDropRatio = (p1.y - p10.y) / Math.max(0.01, dy);
+          metrics = { landmarkPitch, noseDropRatio };
         }
+        if (!pose && metrics) {
+          pose = { yaw: 0, pitch: metrics.landmarkPitch };
+        }
+
         let minX = 1, minY = 1, maxX = 0, maxY = 0;
         for (const p of lms[0]) {
           if (p.x < minX) minX = p.x; if (p.x > maxX) maxX = p.x;
@@ -292,7 +306,7 @@ function sample(ts) {
     if (calibrationPoses.length > 20) calibrationPoses.shift();
   }
 
-  return { light, delta, videoAdvancing, faces, pose, box };
+  return { light, delta, videoAdvancing, faces, pose, box, metrics };
 }
 
 /* --- 04 · CALIBRATION ---------------------------------------------------- */
@@ -425,17 +439,27 @@ function evaluate(r, t) {
       tracker.multiSince = t;
     }
     if (r.faces === 1) {
-      if (!r.pose) {
+      if (!r.pose && !r.metrics) {
         flag('POSE_UNKNOWN', Level.ADVISORY, 'Head pose indeterminate (facial transform unavailable for 3s+)');
         tracker.gazeSince = 0;
       } else {
         const base = (S.baseline && S.baseline.pose) || { yaw: 0, pitch: 0 };
-        const yaw = r.pose.yaw - base.yaw;
-        const pitch = r.pose.pitch - base.pitch;
-        const away = Math.abs(yaw) > s.yawLimitDeg || pitch < -s.pitchDownLimitDeg;
+        const rawPitch = r.pose ? (r.pose.pitch - base.pitch) : 0;
+        const yaw = r.pose ? (r.pose.yaw - base.yaw) : 0;
+
+        // Strict downward gaze and head rotation detection
+        const matrixDown = Math.abs(rawPitch) > s.pitchDownLimitDeg;
+        const landmarkDown = r.metrics && Math.abs(r.metrics.landmarkPitch) > s.pitchDownLimitDeg;
+        const noseDrop = r.metrics && r.metrics.noseDropRatio > 0.72;
+
+        const lookingDown = matrixDown || landmarkDown || noseDrop;
+        const turnedAway = Math.abs(yaw) > s.yawLimitDeg;
+        const away = turnedAway || lookingDown;
+
         if (since('gazeSince', away) >= s.gazeSustainSeconds) {
-          const what = Math.abs(yaw) > s.yawLimitDeg ? `head turned ${Math.round(Math.abs(yaw))}°` : `looking down ${Math.round(-pitch)}°`;
-          flag('GAZE_EVASION', Level.ADVISORY, `Sustained gaze away from screen (${what})`, { yaw: Math.round(yaw), pitch: Math.round(pitch) });
+          const deg = Math.round(Math.max(Math.abs(rawPitch), r.metrics ? Math.abs(r.metrics.landmarkPitch) : 0));
+          const what = turnedAway ? `head turned ${Math.round(Math.abs(yaw))}°` : `looking down (${deg > 0 ? `${deg}°` : 'downward gaze'})`;
+          flag('GAZE_EVASION', Level.ADVISORY, `Sustained gaze away from screen (${what})`, { yaw: Math.round(yaw), pitch: Math.round(rawPitch) });
           tracker.gazeSince = t;
         }
       }

@@ -379,7 +379,7 @@ function stripLocalStills(pkg) {
   pkg.forensics.thumbs = [];
 }
 
-function writeOutbox(v) {
+export function writeOutbox(v) {
   if (!v) {
     try { localStorage.removeItem(OUTBOX); } catch (_) {}
     return;
@@ -398,7 +398,7 @@ function writeOutbox(v) {
   }
 }
 
-async function commitToFirebase(pkg) {
+export async function commitToFirebase(pkg) {
   try { await flushAdvisories(); } catch (_) { /* non-blocking */ }
   await fb.commitSubmission({
     submission: pkg.submission,
@@ -409,7 +409,7 @@ async function commitToFirebase(pkg) {
 }
 
 /**
- * @returns {{firebase:'recorded'|'queued'|'offline-mode', jotform:'dispatched'|'failed'|'disabled'}}
+ * @returns {{firebase:'recorded'|'queued'|'offline-mode', jotform:'dispatched'|'failed'|'queued'|'disabled'}}
  */
 export async function dispatch(pkg, onRetrySuccess) {
   const status = { firebase: 'offline-mode', jotform: 'disabled' };
@@ -432,26 +432,29 @@ export async function dispatch(pkg, onRetrySuccess) {
     stripLocalStills(pkg);
   }
 
-  if (status.firebase === 'recorded') status.jotform = await sendToJotform(pkg);
-  else status.jotform = fb.isReady() ? 'failed' : 'disabled';
+  if (status.firebase === 'recorded') {
+    status.jotform = await sendToJotform(pkg);
+  } else {
+    status.jotform = fb.isReady() ? 'queued' : 'disabled';
+  }
   return status;
 }
 
 let retryHandle = null;
-function scheduleRetry(pkg, onSuccess) {
+export function scheduleRetry(pkg, onSuccess) {
   if (retryHandle) return;
   const attempt = async () => {
     try {
       await commitToFirebase(pkg);
       writeOutbox(null);
-      await sendToJotform(pkg);
+      const jfStatus = await sendToJotform(pkg);
       clearInterval(retryHandle);
       retryHandle = null;
       window.removeEventListener('online', attempt);
-      onSuccess && onSuccess();
+      onSuccess && onSuccess({ firebase: 'recorded', jotform: jfStatus });
     } catch (_) { /* keep trying */ }
   };
-  retryHandle = setInterval(attempt, 15000);
+  retryHandle = setInterval(attempt, 5000);
   window.addEventListener('online', attempt);
 }
 
@@ -477,7 +480,7 @@ export async function flushOutbox() {
 
 export function hasOutbox() { return !!readOutbox(); }
 
-async function sendToJotform(pkg) {
+export async function sendToJotform(pkg) {
   const jf = cfg().jotform;
   if (!jf || !jf.enabled) return 'disabled';
   try {

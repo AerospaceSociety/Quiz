@@ -219,6 +219,12 @@
               type="button">Release</button></div>
           <p class="tool-status" id="release-status"></p>
         </section>
+        <section class="card">
+          <h2 class="card__title">Import &amp; reconcile submission</h2>
+          <p class="note">If a candidate's submission was interrupted or held in their browser outbox, upload their exported proof or outbox JSON here. The SHA-256 payload checksum will be verified before committing to the official database.</p>
+          <input type="file" id="file-import-sub" accept="application/json,.json">
+          <p class="tool-status" id="import-sub-status"></p>
+        </section>
         <section class="card card--danger">
           <h2 class="card__title">Retention &amp; DPDP compliance</h2>
           <p class="note">Immediately delete stored reference photos and incident thumbnails from Firestore, clear

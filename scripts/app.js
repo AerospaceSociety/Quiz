@@ -23,9 +23,10 @@ import * as fb from './firebase.js';
 import { installSandbox, armSandbox, disarmSandbox, enterFullscreen, exitFullscreen, isFullscreen, unloadPromptWithin } from './sandbox.js';
 import { monoNow, syncClock, httpDateSampler, createExamClock } from './timer.js';
 import {
-  startTelemetry, stopTelemetry, wireEventStream, buildPackage, dispatch, flushOutbox, hasOutbox, printReceipt
+  startTelemetry, stopTelemetry, wireEventStream, buildPackage, dispatch, flushOutbox, hasOutbox, printReceipt,
+  commitToFirebase, sendToJotform, writeOutbox, scheduleRetry, prepareOutboxPackage
 } from './submission.js';
-import { $, setText, show, deepFreeze, randomHex, withTimeout } from './util.js';
+import { $, setText, show, deepFreeze, randomHex, withTimeout, downloadBlob } from './util.js';
 
 let settings = null;
 let control = { status: 'waiting' };
@@ -624,13 +625,53 @@ async function seal(reason) {
   proctor.releaseMedia();
   if (controlUnsub) controlUnsub();
 
-  const release = () => fb.signOutUser().catch(() => {});   // frees this terminal for the next candidate
-  let status;
+  let status = { firebase: 'queued', jotform: 'disabled' };
   try {
-    status = await dispatch(pkg, () => {
-      view.paintDispatch({ ...status, firebase: 'recorded' });
-      release();
-    });
+    if (fb.isReady()) {
+      let committed = false;
+      let attempts = 0;
+      const maxDirectAttempts = 5;
+      while (!committed && attempts < maxDirectAttempts) {
+        attempts++;
+        try {
+          if (attempts > 1) {
+            setText('sub-step-2-text', `Retrying database transmission (attempt ${attempts}/${maxDirectAttempts})…`);
+          }
+          await commitToFirebase(pkg);
+          committed = true;
+          status.firebase = 'recorded';
+          writeOutbox(null);
+        } catch (err) {
+          console.warn(`[submission] seal commit attempt ${attempts} failed:`, err.message);
+          if (attempts < maxDirectAttempts) {
+            await new Promise((r) => setTimeout(r, 1200));
+          }
+        }
+      }
+
+      if (committed) {
+        view.paintSubmitting(2); // Step 2 checked, Step 3 active
+        try {
+          status.jotform = await sendToJotform(pkg);
+        } catch (jerr) {
+          console.warn('[submission] jotform mirror error:', jerr.message);
+          status.jotform = 'failed';
+        }
+        view.paintSubmitting(3); // Step 3 checked
+        await new Promise((r) => setTimeout(r, 500));
+      } else {
+        const retryPackage = prepareOutboxPackage(pkg);
+        writeOutbox(pkg);
+        status.firebase = 'queued';
+        status.jotform = 'queued';
+        scheduleRetry(retryPackage, (s) => {
+          view.paintDispatch(s || { firebase: 'recorded', jotform: 'dispatched' });
+        });
+      }
+    } else {
+      status.firebase = 'offline-mode';
+      status.jotform = 'disabled';
+    }
   } finally {
     S.baseline = null;
     S.thumbs = [];
@@ -642,7 +683,6 @@ async function seal(reason) {
   }
   setStage(Stage.SEALED);
   view.renderSealed(pkg, status);
-  if (status.firebase === 'recorded') release();
 }
 
 /* --- 07 · WIRING ---------------------------------------------------------- */
@@ -708,6 +748,34 @@ function wire() {
   $('btn-print').addEventListener('click', () => {
     const c = S.candidate;
     printReceipt(`CelesteCon2026_Receipt_${c.schoolUid}_${c.teamId}_${S.sessionId}`.replace(/[^A-Za-z0-9_-]/g, ''));
+  });
+
+  $('btn-download-record')?.addEventListener('click', () => {
+    const pkg = S.sealed || JSON.parse(localStorage.getItem('qz.outbox.v2') || 'null');
+    if (!pkg) { toast('Proof unavailable', 'No sealed package found.', 'warn'); return; }
+    const c = S.candidate;
+    const blob = new Blob([JSON.stringify(pkg, null, 2)], { type: 'application/json' });
+    downloadBlob(blob, `quizzitch-proof-${c.schoolUid}-${c.teamId}-${S.sessionId}.json`.replace(/[^A-Za-z0-9_.-]/g, ''));
+  });
+
+  $('btn-retry-sync')?.addEventListener('click', async () => {
+    const btn = $('btn-retry-sync');
+    if (btn) btn.disabled = true;
+    toast('Transmitting…', 'Retrying server sync now…', 'info');
+    try {
+      const ok = await flushOutbox();
+      if (ok) {
+        const jf = cfg().jotform?.enabled ? 'dispatched' : 'disabled';
+        view.paintDispatch({ firebase: 'recorded', jotform: jf });
+        toast('Sync successful', 'Your submission is now recorded on the server.', 'ok');
+      } else {
+        toast('Still pending', 'Server sync could not complete. Retrying automatically.', 'warn');
+      }
+    } catch (err) {
+      toast('Retry failed', err.message, 'danger');
+    } finally {
+      if (btn) btn.disabled = false;
+    }
   });
 
   const net = () => view.paintNet(navigator.onLine);
