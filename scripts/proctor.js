@@ -234,6 +234,12 @@ async function recoverLandmarker() {
 /** Runs one throttled sample: draw → light/freeze → inference → pose. */
 function sample(ts) {
   const s = cfg().proctoring;
+  if (!fctx || !frame) {
+    frame = document.createElement('canvas');
+    frame.width = s.frameWidth;
+    frame.height = s.frameHeight;
+    fctx = frame.getContext('2d', { willReadFrequently: true });
+  }
   fctx.drawImage(video, 0, 0, s.frameWidth, s.frameHeight);
   const img = fctx.getImageData(0, 0, s.frameWidth, s.frameHeight);
   const light = lighting(img.data, s.frameWidth, s.frameHeight);
@@ -246,6 +252,7 @@ function sample(ts) {
   let faces = null;
   let pose = null;
   let box = null;
+  let metrics = null;
   if (landmarker) {
     try {
       const safeTs = nextLandmarkerTimestamp(ts);
@@ -268,7 +275,6 @@ function sample(ts) {
             pose = null;
           }
         }
-        let metrics = null;
         if (lms[0] && lms[0].length >= 153) {
           const p10 = lms[0][10];   // forehead
           const p152 = lms[0][152]; // chin
