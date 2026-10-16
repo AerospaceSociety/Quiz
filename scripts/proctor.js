@@ -267,6 +267,7 @@ function sample(ts) {
           } else {
             pose = null;
           }
+        }
         let metrics = null;
         if (lms[0] && lms[0].length >= 153) {
           const p10 = lms[0][10];   // forehead

@@ -1,9 +1,23 @@
 import assert from 'node:assert/strict';
-import { existsSync, mkdtempSync, rmSync } from 'node:fs';
+import { existsSync, mkdtempSync, rmSync, readdirSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { execFileSync } from 'node:child_process';
 import { onRequest } from '../functions/config/[[path]].js';
 import { buildStatic } from '../scripts/build-static.js';
+
+for (const dir of ['scripts', 'functions']) {
+  const checkDir = (d) => {
+    for (const ent of readdirSync(d, { withFileTypes: true })) {
+      const full = path.join(d, ent.name);
+      if (ent.isDirectory()) checkDir(full);
+      else if (ent.name.endsWith('.js')) {
+        execFileSync(process.execPath, ['--check', full]);
+      }
+    }
+  };
+  checkDir(dir);
+}
 
 for (const path of [
   '/config/questions.json',
